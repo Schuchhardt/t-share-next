@@ -8,6 +8,8 @@
  * components.
  */
 
+import type { PreviewKind } from "@/lib/preview";
+
 export type CatalogItem = {
   id: number;
   name: string;
@@ -32,6 +34,10 @@ export type ActivityDocument = {
   url: string | null;
   /** "Guía", "Video"… — absent for materials and instructions. */
   kind: string | null;
+  /** How it can be shown inline, or null when it can only be downloaded. */
+  preview: PreviewKind;
+  /** The extension, uppercased: "PDF", "JPG". Null for a bare link. */
+  format: string | null;
 };
 
 export type ActivityStep = {

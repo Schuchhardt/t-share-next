@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { T, db, unwrap } from "@/lib/supabase";
 import { documentName, stepName } from "@/lib/format";
+import { fileLabel, previewKind } from "@/lib/preview";
 import { fileUrl } from "@/lib/storage";
 import type {
   ActivityDetail,
@@ -311,12 +312,20 @@ export async function getActivity(id: number): Promise<ActivityDetail | null> {
     Promise.all(liveResources.map((r) => fileUrl({ key: r.file_key, url: r.file_url }))),
   ]);
 
-  const documents: ActivityDocument[] = liveResources.map((r, i) => ({
-    id: r.id,
-    name: documentName(r.name, r.resource_type?.name ?? null),
-    url: resourceUrls[i] ?? r.external_url ?? null,
-    kind: r.resource_type?.name?.trim() ?? null,
-  }));
+  const documents: ActivityDocument[] = liveResources.map((r, i) => {
+    const url = resourceUrls[i] ?? r.external_url ?? null;
+    // The key is the honest source for the extension: a signed URL carries a
+    // query string, and 762 migrated rows keep a Canva link in `nombre`.
+    const source = r.file_key ?? r.file_url ?? url;
+    return {
+      id: r.id,
+      name: documentName(r.name, r.resource_type?.name ?? null),
+      url,
+      kind: r.resource_type?.name?.trim() ?? null,
+      preview: previewKind(source),
+      format: fileLabel(source),
+    };
+  });
 
   const steps: ActivityStep[] = liveInstructions
     .filter((i) => i.body?.trim() || i.name?.trim())

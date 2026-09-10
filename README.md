@@ -42,7 +42,11 @@ src/
     comments.ts       comentarios
     users.ts          cuentas y perfil
     storage.ts        S3: subida y URLs firmadas
-    auth/             contraseñas, token de sesión, acciones de cuenta
+    preview.ts        qué archivos se pueden mostrar sin descargar
+    email.ts          envío por SendGrid
+    notifications.ts  los tres correos que manda la aplicación
+    auth/             contraseñas, token de sesión, acciones de cuenta,
+                      tokens de recuperación
     activity-actions.ts  guardar, descargar, comentar, publicar
     filters.ts        lectura de la query string
     format.ts         strings de presentación
@@ -64,6 +68,8 @@ Las URLs se mantienen iguales a las del front Angular para no romper enlaces ni 
 | `/mi-perfil` | Subidas y guardadas | con cuenta |
 | `/entrar`, `/registro` | Sesión | visitante |
 | `/cambiar-password` | Cambio de contraseña (forzado tras la migración) | con cuenta |
+| `/recuperar-clave` | Pedir un enlace de recuperación por correo | público |
+| `/cambiar-clave` | Elegir contraseña nueva desde ese enlace | con el token |
 
 ## Puesta en marcha
 
@@ -73,7 +79,10 @@ Las URLs se mantienen iguales a las del front Angular para no romper enlaces ni 
    genera con `openssl rand -base64 32`.
 3. **S3.** El bucket actual se sigue usando tal cual: no se migra nada. Las
    subidas nuevas van al mismo bucket y guardan la URL en la base; los archivos
-   antiguos se sirven con una URL firmada a partir de su *key*.
+   antiguos se sirven con una URL firmada a partir de su *key*. El bucket es
+   privado, así que `S3_PUBLIC_BASE_URL` tiene que quedar vacía.
+4. **Correo.** `SENDGRID_API_KEY` y, en local, `APP_URL=http://localhost:9796`.
+   Ver [Correo](#correo).
 
 ## Contraseñas migradas
 
@@ -82,9 +91,42 @@ Las cuentas traen el hash bcrypt de Laravel (`$2y$`). La aplicación lo acepta
 contraseña que ya tenía; en ese mismo ingreso se le exige una nueva, que queda
 guardada con el hash de esta aplicación. Detalle en `db/README.md`.
 
+## Correo
+
+Se manda por **SendGrid**, la misma cuenta que usaba la API Laravel. Son los
+tres correos que ya existían, con el mismo asunto para no romper los filtros
+que los profesores tengan armados:
+
+| Cuándo | Asunto | Antes era |
+| --- | --- | --- |
+| Al crear una cuenta | ¡Bienvenido a T-share! | `WelcomeUser` |
+| Al pedir recuperar la contraseña | Recuperación de contraseña - T-share | `PasswordReset` |
+| Al comentar la actividad de otro | Han comentado tu actividad en T-share | `ActividadComentada` |
+
+Los otros tres que mandaba correo en Laravel (`UsuarioMensaje`,
+`ActividadSolicitaAutorizacion` y `AutorizaEdicionActividad`) son de la
+mensajería interna y de la autorización de edición, que esta aplicación todavía
+no tiene. Cuando existan, los constructores van en `src/lib/notifications.ts`
+junto a los otros.
+
+Sin `SENDGRID_API_KEY` no falla nada: el envío se registra en consola y la
+acción sigue. En local conviene poner `APP_URL=http://localhost:9796`, o el
+enlace de recuperación apunta a producción.
+
+El envío nunca bloquea al usuario. El de bienvenida y el de comentario salen
+con `after()` —después de la respuesta— y ninguno de los tres convierte un
+fallo de SendGrid en un error de formulario.
+
+### Recuperación de contraseña
+
+`tshare_password_resets` guarda un SHA-256 del token, nunca el token: la única
+copia del valor real es la que va en el correo. Dura una hora, sirve una sola
+vez, y pedir otro invalida el anterior. Las rutas son las mismas del sitio
+Angular (`/recuperar-clave` y `/cambiar-clave?token=…`).
+
 ## Tests
 
-`npm test` corre 128 pruebas unitarias sin necesidad de base de datos. Entre
+`npm test` corre 168 pruebas unitarias sin necesidad de base de datos. Entre
 otras cosas fijan el mapeo de la migración contra los CSV reales, la
 verificación de los hashes `$2y$`, el token de sesión, el armado de filtros y el
 formulario de subida.
@@ -108,7 +150,12 @@ Server Components, las Server Actions y el proxy como funciones.
 En **Site configuration → Environment variables** hay que cargar las mismas
 variables de `.env.example`: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
 `SESSION_SECRET`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`,
-`S3_SECRET_ACCESS_KEY` y, si corresponde, `S3_PUBLIC_BASE_URL`.
+`S3_SECRET_ACCESS_KEY`, `SENDGRID_API_KEY`, `MAIL_FROM_ADDRESS`,
+`MAIL_FROM_NAME` y `APP_URL`.
+
+**`S3_PUBLIC_BASE_URL` va vacía.** El bucket de producción es privado: si se
+llena, la aplicación entrega la URL sin firmar y todas las imágenes y descargas
+del sitio responden 403.
 
 ```bash
 netlify link      # una vez

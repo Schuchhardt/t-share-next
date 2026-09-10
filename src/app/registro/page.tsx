@@ -15,6 +15,10 @@ export default function RegistroPage() {
       footer={
         <>
           ¿Ya tienes cuenta? <Link href="/entrar">Entrar</Link>
+          <br />
+          Al crear una cuenta aceptas los{" "}
+          <Link href="/terminos">términos y condiciones</Link> y la{" "}
+          <Link href="/privacidad">política de privacidad</Link>.
         </>
       }
     >

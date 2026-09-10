@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { FileDropzone } from "@/components/file-dropzone";
+import { ImagePicker } from "@/components/image-picker";
 import { createActivity } from "@/lib/activity-actions";
 import type { CatalogItem, Grade } from "@/lib/types";
 
@@ -213,6 +214,8 @@ export function CreateActivityForm({
           </select>
         </div>
       )}
+
+      <ImagePicker />
 
       <FileDropzone />
 

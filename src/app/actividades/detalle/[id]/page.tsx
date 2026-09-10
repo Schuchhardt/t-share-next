@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActivityActions } from "@/components/activity-actions";
+import { ActivityCover } from "@/components/activity-cover";
 import { CommentThread } from "@/components/comment-thread";
-import { DownloadLink } from "@/components/download-link";
+import { DocumentList } from "@/components/document-list";
 import { getActivity, getSavedActivityIds } from "@/lib/activities";
 import { getComments } from "@/lib/comments";
 import { getSession } from "@/lib/auth/session";
 import { formatDate, formatDuration, joinEs, metaLine } from "@/lib/format";
+import type { ActivityDocument } from "@/lib/types";
 
 export async function generateMetadata({ params }: PageProps<"/actividades/detalle/[id]">) {
   const { id } = await params;
@@ -39,9 +41,18 @@ export default async function DetallePage({ params }: PageProps<"/actividades/de
     { k: "Publicada", v: formatDate(activity.createdAt) },
   ].filter((row): row is { k: string; v: string } => row !== null);
 
-  const documents = [
+  const documents: ActivityDocument[] = [
     ...(activity.pdfUrl
-      ? [{ id: 0, name: "Actividad en PDF", url: activity.pdfUrl, kind: "PDF" }]
+      ? [
+          {
+            id: 0,
+            name: "Actividad en PDF",
+            url: activity.pdfUrl,
+            kind: "PDF",
+            preview: "pdf" as const,
+            format: "PDF",
+          },
+        ]
       : []),
     ...activity.documents,
   ];
@@ -78,6 +89,10 @@ export default async function DetallePage({ params }: PageProps<"/actividades/de
 
       <section className="grid grid-cols-1 items-start gap-13 pt-[34px] lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
         <div className="grid gap-[30px]">
+          {activity.coverUrl && (
+            <ActivityCover src={activity.coverUrl} title={activity.title} />
+          )}
+
           {activity.learningObjective && (
             <div className="grid gap-2">
               <span className="eyebrow">Objetivo de aprendizaje</span>
@@ -148,19 +163,11 @@ export default async function DetallePage({ params }: PageProps<"/actividades/de
         <aside className="grid gap-[26px] lg:sticky lg:top-[86px]">
           <div className="grid gap-2 rounded-md bg-mint p-5">
             <span className="eyebrow text-mint-label">Documentos</span>
-            {documents.length === 0 && (
-              <p className="py-2 text-sm text-mint-meta">Esta actividad no tiene archivos.</p>
-            )}
-            {documents.map((doc) => (
-              <DownloadLink
-                key={`${doc.id}-${doc.name}`}
-                activityId={activity.id}
-                href={doc.url}
-                name={doc.name}
-                meta={doc.kind ?? "Archivo"}
-                signedIn={Boolean(session)}
-              />
-            ))}
+            <DocumentList
+              activityId={activity.id}
+              documents={documents}
+              signedIn={Boolean(session)}
+            />
           </div>
 
           <div className="grid gap-2">

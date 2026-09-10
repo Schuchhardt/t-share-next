@@ -735,7 +735,11 @@ as $$
         (select count(*)::int from tshare_saved_activities s where s.activity_id = a.id),
       download_count =
         (select coalesce(sum(d.quantity), 0)::int from tshare_activity_downloads d
-         where d.activity_id = a.id);
+         where d.activity_id = a.id)
+  -- Supabase preloads `safeupdate`, which rejects an UPDATE with no WHERE even
+  -- inside a function. Every activity has a positive id, so this matches all of
+  -- them while giving the guard the qual it asks for.
+  where a.id > 0;
 $$;
 
 comment on function tshare_refresh_activity_counters() is

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { ActivityRow } from "@/components/activity-row";
+import { Allies } from "@/components/allies";
 import { SearchBar } from "@/components/search-bar";
 import { countActivities, getRecentActivities } from "@/lib/activities";
 import { getSubjects } from "@/lib/catalog";
@@ -58,6 +59,8 @@ export default async function HomePage() {
           <ActivityRow key={activity.id} activity={activity} size="lg" />
         ))}
       </section>
+
+      <Allies />
     </>
   );
 }

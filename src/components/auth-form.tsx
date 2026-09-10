@@ -58,6 +58,15 @@ export function AuthForm({
           {state.error}
         </p>
 
+        {state.notice && (
+          <p
+            aria-live="polite"
+            className="rounded-sm bg-mint px-4 py-3 text-sm leading-[1.55] text-mint-strong"
+          >
+            {state.notice}
+          </p>
+        )}
+
         <Submit label={submitLabel} pendingLabel={pendingLabel} />
       </form>
 

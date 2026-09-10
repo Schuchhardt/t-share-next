@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { z } from "zod";
 import {
   checkPasswordStrength,
@@ -9,11 +10,17 @@ import {
   verifyPassword,
 } from "@/lib/auth/password";
 import {
+  createPasswordReset,
+  findPasswordReset,
+  markPasswordResetUsed,
+} from "@/lib/auth/reset";
+import {
   clearSessionCookie,
   getSession,
   requireSession,
   setSessionCookie,
 } from "@/lib/auth/session";
+import { notifyPasswordReset, notifyWelcome } from "@/lib/notifications";
 import {
   createAccount,
   emailExists,
@@ -34,11 +41,20 @@ import {
  * until this app has written its own hash.
  */
 
-export type FormState = { error: string | null };
+export type FormState = {
+  error: string | null;
+  /** A confirmation to show in place of an error, e.g. "revisa tu correo". */
+  notice?: string | null;
+};
 
 /** What every action returns when the form itself is wrong. */
 function fail(message: string): FormState {
   return { error: message };
+}
+
+/** What an action returns when it worked but stays on the same screen. */
+function done(message: string): FormState {
+  return { error: null, notice: message };
 }
 
 const emailField = z
@@ -148,6 +164,10 @@ export async function signUp(_prev: FormState, formData: FormData): Promise<Form
     mustChangePassword: false,
   });
 
+  // The old app sent this from `UserController@store`. `after` keeps SendGrid
+  // off the critical path — it still runs when the redirect below throws.
+  after(() => notifyWelcome({ email: account.email, name: firstName }));
+
   redirect("/actividades");
 }
 
@@ -194,6 +214,86 @@ export async function changePassword(_prev: FormState, formData: FormData): Prom
   await setSessionCookie({ ...session, mustChangePassword: false });
 
   redirect("/actividades");
+}
+
+// ---------------------------------------------------------------------------
+// Recuperación de contraseña
+// ---------------------------------------------------------------------------
+
+/**
+ * Always the same answer, whether or not the address is registered — the form
+ * is public, so a different message for "no such account" would turn it into a
+ * way to test which teachers have an account here.
+ */
+const RESET_SENT =
+  "Si existe una cuenta con ese correo, te enviamos un enlace para cambiar la contraseña. Revisa también la carpeta de spam.";
+
+export async function requestPasswordReset(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const parsed = z.object({ email: emailField }).safeParse({ email: formData.get("email") });
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Revisa tu correo.");
+
+  const account = await findAccountByEmail(parsed.data.email);
+  if (account && !account.deleted_at) {
+    const token = await createPasswordReset(account.id);
+    await notifyPasswordReset(
+      { email: account.email, name: account.first_name || displayName(account) },
+      token,
+    );
+  }
+
+  return done(RESET_SENT);
+}
+
+const resetPasswordSchema = z
+  .object({
+    token: z.string().min(1),
+    password: z.string(),
+    passwordConfirm: z.string(),
+  })
+  .refine((v) => v.password === v.passwordConfirm, {
+    message: "Las contraseñas no coinciden.",
+    path: ["passwordConfirm"],
+  });
+
+/**
+ * Sets the new password from an emailed link. The token is spent only once the
+ * hash is written, so a failure halfway through leaves the link usable.
+ *
+ * Nobody is signed in here, and this deliberately does not sign them in: the
+ * teacher lands on /entrar and proves the new password works.
+ */
+export async function resetPassword(_prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = resetPasswordSchema.safeParse({
+    token: formData.get("token"),
+    password: formData.get("password"),
+    passwordConfirm: formData.get("passwordConfirm"),
+  });
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Revisa los datos.");
+
+  const lookup = await findPasswordReset(parsed.data.token);
+  if (!lookup.ok) {
+    return fail(
+      lookup.reason === "used"
+        ? "Ese enlace ya se usó. Pide uno nuevo desde “¿Olvidaste tu contraseña?”."
+        : lookup.reason === "expired"
+          ? "Ese enlace venció. Pide uno nuevo desde “¿Olvidaste tu contraseña?”."
+          : "Ese enlace no es válido. Pide uno nuevo desde “¿Olvidaste tu contraseña?”.",
+    );
+  }
+
+  const account = await findAccountById(lookup.userId);
+  if (!account || account.deleted_at) return fail("No encontramos tu cuenta.");
+
+  const weak = checkPasswordStrength(parsed.data.password, account.email);
+  if (weak) return fail(weak);
+
+  await setPassword(account.id, await hashPassword(parsed.data.password));
+  await markPasswordResetUsed(lookup.rowId);
+
+  redirect("/entrar?password=cambiada");
 }
 
 export async function signOut(): Promise<void> {

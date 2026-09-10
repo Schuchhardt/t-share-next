@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { fileLabel, previewKindForFile } from "@/lib/preview";
 
 /**
  * The document picker on the upload form.
@@ -10,10 +11,18 @@ import { useRef, useState } from "react";
  * state only mirrors it for the list below. Dropping files and removing one
  * write back into the input through a `DataTransfer`, which is the only way to
  * assign a `FileList`.
+ *
+ * Each picked file carries its preview alongside it: an object URL when it is
+ * an image, null otherwise. Minting it here rather than inside the row keeps
+ * the URL's lifetime tied to the list that owns it, so removing a file can
+ * revoke it on the spot instead of leaving the blob alive until reload.
  */
 
 const MAX_BYTES = 25 * 1024 * 1024;
 const ACCEPT = ".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.mp4";
+
+/** A picked file and the object URL used to preview it, when it has one. */
+type Picked = { file: File; url: string | null };
 
 export function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -28,16 +37,26 @@ export function sameFile(a: File, b: File): boolean {
 
 export function FileDropzone() {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [files, setFiles] = useState<File[]>([]);
+  const [picked, setPicked] = useState<Picked[]>([]);
   const [dragging, setDragging] = useState(false);
   const [rejected, setRejected] = useState<string[]>([]);
 
+  // Written by `sync` below, never during render, so that leaving the page
+  // releases whatever blobs the list still holds.
+  const liveUrls = useRef<string[]>([]);
+  useEffect(() => {
+    return () => {
+      for (const url of liveUrls.current) URL.revokeObjectURL(url);
+    };
+  }, []);
+
   /** Pushes the list back into the input so the form submits exactly it. */
-  function sync(next: File[]) {
+  function sync(next: Picked[]) {
     const transfer = new DataTransfer();
-    for (const file of next) transfer.items.add(file);
+    for (const item of next) transfer.items.add(item.file);
     if (inputRef.current) inputRef.current.files = transfer.files;
-    setFiles(next);
+    liveUrls.current = next.map((i) => i.url).filter((u): u is string => u !== null);
+    setPicked(next);
   }
 
   function add(incoming: FileList | null) {
@@ -49,11 +68,21 @@ export function FileDropzone() {
       else accepted.push(file);
     }
     setRejected(tooBig);
-    sync([...files, ...accepted.filter((f) => !files.some((p) => sameFile(p, f)))]);
+
+    const fresh = accepted
+      .filter((f) => !picked.some((p) => sameFile(p.file, f)))
+      .map((file) => ({
+        file,
+        url: previewKindForFile(file) === "image" ? URL.createObjectURL(file) : null,
+      }));
+
+    sync([...picked, ...fresh]);
   }
 
   function remove(index: number) {
-    sync(files.filter((_, i) => i !== index));
+    const gone = picked[index];
+    if (gone?.url) URL.revokeObjectURL(gone.url);
+    sync(picked.filter((_, i) => i !== index));
   }
 
   return (
@@ -104,16 +133,21 @@ export function FileDropzone() {
         </p>
       )}
 
-      {files.length > 0 && (
+      {picked.length > 0 && (
         <ul className="grid gap-0">
-          {files.map((file, i) => (
+          {picked.map((item, i) => (
             <li
-              key={`${file.name}-${file.size}-${file.lastModified}`}
+              key={`${item.file.name}-${item.file.size}-${item.file.lastModified}`}
               className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-line py-2.5"
             >
-              <span className="grid gap-0.5">
-                <span className="truncate text-[15px] font-medium text-ink">{file.name}</span>
-                <span className="text-xs text-muted">{formatSize(file.size)}</span>
+              <span className="flex min-w-0 items-center gap-2.5">
+                <Thumb item={item} />
+                <span className="grid min-w-0 gap-0.5">
+                  <span className="truncate text-[15px] font-medium text-ink">
+                    {item.file.name}
+                  </span>
+                  <span className="text-xs text-muted">{formatSize(item.file.size)}</span>
+                </span>
               </span>
               <button
                 type="button"
@@ -127,5 +161,28 @@ export function FileDropzone() {
         </ul>
       )}
     </div>
+  );
+}
+
+/**
+ * The image itself when there is one, and the extension otherwise — a generic
+ * paper icon would say less than "DOCX" does.
+ */
+function Thumb({ item }: { item: Picked }) {
+  if (item.url) {
+    return (
+      /* eslint-disable-next-line @next/next/no-img-element */
+      <img
+        src={item.url}
+        alt=""
+        className="size-11 shrink-0 rounded-sm border border-line object-cover"
+      />
+    );
+  }
+
+  return (
+    <span className="grid size-11 shrink-0 place-items-center rounded-sm bg-lav text-[10px] font-bold tracking-[0.04em] text-indigo">
+      {fileLabel(item.file.name) ?? "DOC"}
+    </span>
   );
 }

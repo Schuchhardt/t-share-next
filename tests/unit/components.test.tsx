@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ActivityRow } from "@/components/activity-row";
+import { DocumentList, describe as describeDoc } from "@/components/document-list";
 import { FileDropzone, formatSize, sameFile } from "@/components/file-dropzone";
-import type { ActivitySummary } from "@/lib/types";
+import { ImagePicker } from "@/components/image-picker";
+import type { ActivityDocument, ActivitySummary } from "@/lib/types";
 import { initials } from "@/lib/types";
 
 const activity: ActivitySummary = {
@@ -119,6 +121,144 @@ describe("FileDropzone", () => {
 
     expect(input.files).toHaveLength(0);
     expect(screen.queryByText("guia.pdf")).not.toBeInTheDocument();
+  });
+});
+
+describe("FileDropzone previews", () => {
+  function pick(input: HTMLInputElement, ...files: File[]) {
+    const transfer = new DataTransfer();
+    for (const file of files) transfer.items.add(file);
+    input.files = transfer.files;
+    fireEvent.change(input);
+  }
+
+  it("shows the image itself and the extension for everything else", () => {
+    render(<FileDropzone />);
+    const input = screen.getByLabelText("Documentos de la actividad") as HTMLInputElement;
+
+    pick(
+      input,
+      new File(["a"], "mural.png", { type: "image/png" }),
+      new File(["b"], "planificacion.docx", { type: "" }),
+    );
+
+    const thumb = document.querySelector("img");
+    expect(thumb?.getAttribute("src")).toMatch(/^blob:/);
+    // A DOCX has nothing to render, so the badge names the format instead.
+    expect(screen.getByText("DOCX")).toBeInTheDocument();
+  });
+
+  it("releases the preview when the file is removed", async () => {
+    const user = userEvent.setup();
+    const revoke = vi.spyOn(URL, "revokeObjectURL");
+    render(<FileDropzone />);
+    const input = screen.getByLabelText("Documentos de la actividad") as HTMLInputElement;
+
+    pick(input, new File(["a"], "mural.png", { type: "image/png" }));
+    const url = document.querySelector("img")!.getAttribute("src")!;
+
+    await user.click(screen.getByRole("button", { name: "Quitar" }));
+
+    // Without this the blob stays alive for the rest of the session.
+    expect(revoke).toHaveBeenCalledWith(url);
+    revoke.mockRestore();
+  });
+});
+
+describe("ImagePicker", () => {
+  function choose(input: HTMLInputElement, file: File) {
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    input.files = transfer.files;
+    fireEvent.change(input);
+  }
+
+  it("previews the chosen cover", () => {
+    render(<ImagePicker />);
+    const input = screen.getByLabelText("Portada de la actividad") as HTMLInputElement;
+
+    choose(input, new File(["a"], "portada.jpg", { type: "image/jpeg" }));
+
+    expect(screen.getByAltText("Vista previa de la portada")).toBeInTheDocument();
+    expect(screen.getByText(/portada\.jpg/)).toBeInTheDocument();
+    expect(input.name).toBe("cover");
+  });
+
+  it("refuses a file that is not an image, and keeps it off the input", () => {
+    render(<ImagePicker />);
+    const input = screen.getByLabelText("Portada de la actividad") as HTMLInputElement;
+
+    choose(input, new File(["a"], "planificacion.docx", { type: "" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("tiene que ser una imagen");
+    expect(input.value).toBe("");
+    expect(screen.queryByAltText("Vista previa de la portada")).not.toBeInTheDocument();
+  });
+});
+
+describe("DocumentList", () => {
+  const doc = (over: Partial<ActivityDocument>): ActivityDocument => ({
+    id: 1,
+    name: "Guía",
+    url: "https://bucket.s3.amazonaws.com/actividades/recursos/a.pdf?X-Amz-Signature=x",
+    kind: "Guía",
+    preview: "pdf",
+    format: "PDF",
+    ...over,
+  });
+
+  it("offers a preview only for what a browser can render", () => {
+    render(
+      <DocumentList
+        activityId={42}
+        signedIn={false}
+        documents={[
+          doc({ id: 1, name: "Guía en PDF" }),
+          doc({ id: 2, name: "Planificación", preview: null, format: "DOCX" }),
+        ]}
+      />,
+    );
+
+    // One "Ver" button, for the PDF; the DOCX only gets its download.
+    expect(screen.getAllByRole("button", { name: "Ver" })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: "Descargar ↓" })).toHaveLength(2);
+  });
+
+  it("thumbnails an image without waiting to be asked", () => {
+    render(
+      <DocumentList
+        activityId={42}
+        signedIn={false}
+        documents={[doc({ name: "Mural", preview: "image", format: "JPG" })]}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Ver Mural en grande" })).toBeInTheDocument();
+  });
+
+  it("does not print the format twice when it repeats the type", () => {
+    // The activity's own PDF arrives as kind "PDF" and format "PDF".
+    expect(describeDoc({ kind: "PDF", format: "PDF" })).toBe("PDF");
+    expect(describeDoc({ kind: "Guía", format: "PDF" })).toBe("Guía · PDF");
+    expect(describeDoc({ kind: null, format: "DOCX" })).toBe("DOCX");
+    expect(describeDoc({ kind: null, format: null })).toBe("Archivo");
+  });
+
+  it("says so when there is nothing attached", () => {
+    render(<DocumentList activityId={42} signedIn={false} documents={[]} />);
+    expect(screen.getByText("Esta actividad no tiene archivos.")).toBeInTheDocument();
+  });
+
+  it("marks a file with no reference as unavailable", () => {
+    render(
+      <DocumentList
+        activityId={42}
+        signedIn={false}
+        documents={[doc({ url: null, preview: null, format: null })]}
+      />,
+    );
+    expect(screen.getByText("No disponible")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ver" })).not.toBeInTheDocument();
   });
 });
 

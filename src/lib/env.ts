@@ -55,6 +55,23 @@ export const env = {
   get s3PublicBaseUrl(): string | null {
     return process.env.S3_PUBLIC_BASE_URL?.replace(/\/$/, "") ?? null;
   },
+  /** SendGrid, which is what the Laravel app sent its mail through. */
+  get sendgridApiKey(): string {
+    return required("SENDGRID_API_KEY");
+  },
+  get mailFrom(): string {
+    return process.env.MAIL_FROM_ADDRESS ?? "comunidad@t-share.org";
+  },
+  get mailFromName(): string {
+    return process.env.MAIL_FROM_NAME ?? "T-share";
+  },
+  /**
+   * The canonical origin, used to build the links inside an email — a request
+   * host cannot be trusted for that, and a Server Action has no URL of its own.
+   */
+  get appUrl(): string {
+    return (process.env.APP_URL ?? "https://t-share.org").replace(/\/$/, "");
+  },
 } as const;
 
 /** True when the app has enough configuration to reach Supabase. */
@@ -67,4 +84,9 @@ export function hasStorageConfig(): boolean {
   return Boolean(
     process.env.S3_BUCKET && process.env.S3_ACCESS_KEY_ID && process.env.S3_SECRET_ACCESS_KEY,
   );
+}
+
+/** True when mail can actually leave the machine. */
+export function hasEmailConfig(): boolean {
+  return Boolean(process.env.SENDGRID_API_KEY);
 }

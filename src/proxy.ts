@@ -23,6 +23,14 @@ const GUEST_ONLY = ["/entrar", "/registro"];
 
 const CHANGE_PASSWORD = "/cambiar-password";
 
+/**
+ * The reset-by-email screens. A migrated teacher who is being held on
+ * /cambiar-password may well be there because they do not remember the old
+ * password either — bouncing them off their own reset link would leave them
+ * with no way out.
+ */
+const RESET_BY_EMAIL = ["/recuperar-clave", "/cambiar-clave"];
+
 function matches(pathname: string, routes: string[]): boolean {
   return routes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 }
@@ -40,7 +48,11 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (session.mustChangePassword && pathname !== CHANGE_PASSWORD) {
+  if (
+    session.mustChangePassword &&
+    pathname !== CHANGE_PASSWORD &&
+    !matches(pathname, RESET_BY_EMAIL)
+  ) {
     return NextResponse.redirect(new URL(CHANGE_PASSWORD, request.url));
   }
 
@@ -57,7 +69,10 @@ export default async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Everything except Next's own assets and the files served straight from
-  // /public, so a redirect never fires on a font or an image request.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|brand|fonts).*)"],
+  // Everything except Next's own assets, the generated icon and social-preview
+  // routes, and the files served straight from /public, so a redirect never
+  // fires on a font or an image request.
+  matcher: [
+    "/((?!_next/static|_next/image|icon.svg|apple-icon.png|opengraph-image|brand|fonts|aliados).*)",
+  ],
 };

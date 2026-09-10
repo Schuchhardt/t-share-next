@@ -2,9 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth/session";
 import { hasStorageConfig } from "@/lib/env";
+import { notifyActivityCommented } from "@/lib/notifications";
+import { previewKindForFile } from "@/lib/preview";
 import { putFile, uploadKey } from "@/lib/storage";
 import { T, db, unwrap } from "@/lib/supabase";
 
@@ -18,6 +21,8 @@ import { T, db, unwrap } from "@/lib/supabase";
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 const MAX_FILES = 12;
+/** The cover is decoration, not a resource; 8 MB is already generous for one. */
+const MAX_COVER_BYTES = 8 * 1024 * 1024;
 
 export type ActionResult = { ok: boolean; error: string | null };
 
@@ -117,8 +122,54 @@ export async function addComment(_prev: ActionResult, formData: FormData): Promi
   });
   if (error) return failed(error.message);
 
+  // Laravel did this in `ComentarioController@add`. `after` keeps the mail off
+  // the response, and the comment stands whether or not it goes out.
+  after(() =>
+    notifyAuthorOfComment(parsed.data.activityId, session.userId, session.name).catch((err) =>
+      console.error("[comment] no se pudo avisar al autor:", err),
+    ),
+  );
+
   revalidatePath(`/actividades/detalle/${parsed.data.activityId}`);
   return OK;
+}
+
+/**
+ * Emails the teacher who published the activity. Commenting on your own
+ * activity sends nothing — the old app did notify you of your own comment,
+ * which was noise.
+ */
+async function notifyAuthorOfComment(
+  activityId: number,
+  commenterId: number,
+  commenterName: string,
+): Promise<void> {
+  const { data, error } = await db()
+    .from(T.activities)
+    .select(`id, title, user_id, author:${T.users} ( email, first_name, last_name )`)
+    .eq("id", activityId)
+    .maybeSingle();
+  if (error || !data) return;
+
+  const row = data as unknown as {
+    title: string | null;
+    user_id: number | null;
+    author: { email: string; first_name: string; last_name: string | null } | null;
+  };
+
+  if (!row.author?.email || row.user_id === commenterId) return;
+
+  await notifyActivityCommented(
+    {
+      email: row.author.email,
+      name: row.author.first_name || row.author.email,
+    },
+    {
+      commenterName,
+      activityId,
+      activityTitle: row.title ?? "tu actividad",
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -194,7 +245,18 @@ export async function createActivity(
   if (files.length > MAX_FILES) return failed(`Máximo ${MAX_FILES} archivos por actividad.`);
   const tooBig = files.find((f) => f.size > MAX_FILE_BYTES);
   if (tooBig) return failed(`"${tooBig.name}" supera los 25 MB.`);
-  if (files.length > 0 && !hasStorageConfig()) {
+
+  // The portada — `avatar` on the old `actividades` table.
+  const picked = formData.get("cover");
+  const cover = picked instanceof File && picked.size > 0 ? picked : null;
+  if (cover) {
+    if (previewKindForFile(cover) !== "image") {
+      return failed("La portada tiene que ser una imagen (JPG, PNG, GIF o WEBP).");
+    }
+    if (cover.size > MAX_COVER_BYTES) return failed("La portada supera los 8 MB.");
+  }
+
+  if ((files.length > 0 || cover) && !hasStorageConfig()) {
     return failed("La subida de archivos no está configurada en este entorno.");
   }
 
@@ -248,6 +310,18 @@ export async function createActivity(
       await db()
         .from(T.activityMaterials)
         .insert(materials.map((name) => ({ activity_id: activityId, name })));
+    }
+
+    if (cover) {
+      const stored = await putFile(
+        uploadKey("actividades/portadas", cover.name),
+        new Uint8Array(await cover.arrayBuffer()),
+        cover.type || "image/jpeg",
+      );
+      await db()
+        .from(T.activities)
+        .update({ cover_image_key: stored.key, cover_image_url: stored.url })
+        .eq("id", activityId);
     }
 
     for (const file of files) {
