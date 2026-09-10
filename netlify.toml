@@ -1,0 +1,27 @@
+# Netlify build for the Next.js app.
+#
+# @netlify/plugin-nextjs turns the App Router build into Netlify Functions, so
+# server components, server actions and the middleware all run as-is. Nothing
+# here is statically exported — the app reads Supabase per request.
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Uploads post the file straight to the server action, so the function needs
+# more than the default body limit and a little longer to stream to S3.
+[functions]
+  included_files = []
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "SAMEORIGIN"
