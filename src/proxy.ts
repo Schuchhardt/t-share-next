@@ -73,6 +73,6 @@ export const config = {
   // routes, and the files served straight from /public, so a redirect never
   // fires on a font or an image request.
   matcher: [
-    "/((?!_next/static|_next/image|icon.svg|apple-icon.png|opengraph-image|brand|fonts|aliados).*)",
+    "/((?!_next/static|_next/image|icon.svg|apple-icon.png|opengraph-image|brand|fonts|aliados|como-funciona).*)",
   ],
 };

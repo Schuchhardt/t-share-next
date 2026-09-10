@@ -38,22 +38,3 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
     return false;
   }
 }
-
-export type PasswordProblem = string | null;
-
-/**
- * The rule the change-password and sign-up forms share. Deliberately modest —
- * length does more for a teacher's account than a symbol quota does.
- */
-export function checkPasswordStrength(password: string, email?: string): PasswordProblem {
-  if (password.length < 10) return "La contraseña debe tener al menos 10 caracteres.";
-  if (password.length > 200) return "La contraseña es demasiado larga.";
-  if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
-    return "Incluye al menos una letra y un número.";
-  }
-  const local = email?.split("@")[0]?.toLowerCase();
-  if (local && local.length > 2 && password.toLowerCase().includes(local)) {
-    return "La contraseña no puede contener tu correo.";
-  }
-  return null;
-}

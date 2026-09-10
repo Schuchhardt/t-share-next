@@ -50,6 +50,8 @@ export type ActivitySummary = {
   id: number;
   title: string;
   learningObjective: string | null;
+  /** The portada, shown small on every list row. Null for the few without one. */
+  coverUrl: string | null;
   durationMinutes: number | null;
   createdAt: string;
   author: Author | null;
@@ -65,7 +67,6 @@ export type ActivityDetail = ActivitySummary & {
   description: string | null;
   evaluation: string | null;
   rating: number | null;
-  coverUrl: string | null;
   pdfUrl: string | null;
   skills: string[];
   units: string[];

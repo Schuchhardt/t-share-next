@@ -2,9 +2,10 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { ActivityRow } from "@/components/activity-row";
 import { Allies } from "@/components/allies";
+import { HowItWorks } from "@/components/how-it-works";
 import { SearchBar } from "@/components/search-bar";
 import { countActivities, getRecentActivities } from "@/lib/activities";
-import { getSubjects } from "@/lib/catalog";
+import { getSubjectsWithActivities } from "@/lib/catalog";
 import { FILTER_KEYS } from "@/lib/filters";
 
 /**
@@ -16,7 +17,9 @@ export const revalidate = 300;
 export default async function HomePage() {
   const [recent, subjects, total] = await Promise.all([
     getRecentActivities(4),
-    getSubjects(),
+    // Only the ones with activities behind them: a chip that leads to an empty
+    // results page is worse than one fewer chip.
+    getSubjectsWithActivities(10),
     countActivities(),
   ]);
 
@@ -37,7 +40,7 @@ export default async function HomePage() {
       </Suspense>
 
       <section className="mt-[18px] flex max-w-[700px] flex-wrap gap-2">
-        {subjects.slice(0, 10).map((subject) => (
+        {subjects.map((subject) => (
           <Link
             key={subject.id}
             href={`/actividades?${FILTER_KEYS.subject}=${subject.id}`}
@@ -59,6 +62,8 @@ export default async function HomePage() {
           <ActivityRow key={activity.id} activity={activity} size="lg" />
         ))}
       </section>
+
+      <HowItWorks />
 
       <Allies />
     </>

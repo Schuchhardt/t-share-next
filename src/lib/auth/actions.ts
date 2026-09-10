@@ -3,12 +3,8 @@
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
-import {
-  checkPasswordStrength,
-  hashPassword,
-  isLegacyHash,
-  verifyPassword,
-} from "@/lib/auth/password";
+import { hashPassword, isLegacyHash, verifyPassword } from "@/lib/auth/password";
+import { checkPasswordStrength } from "@/lib/auth/strength";
 import {
   createPasswordReset,
   findPasswordReset,
@@ -199,12 +195,18 @@ export async function changePassword(_prev: FormState, formData: FormData): Prom
   const account = await findAccountById(session.userId);
   if (!account) return fail("No encontramos tu cuenta.");
 
+  // The new password is judged first, and deliberately so. This screen asks a
+  // teacher to *choose* something; if the choice is unusable, saying "tu
+  // contraseña actual no es correcta" points at the wrong field and hides the
+  // real problem — which is exactly what happens when the old password was
+  // mistyped or filled in by a password manager. The rule leaks nothing: it is
+  // the same one the form already applies in the browser.
+  const weak = checkPasswordStrength(parsed.data.password, account.email);
+  if (weak) return fail(weak);
+
   if (!(await verifyPassword(parsed.data.currentPassword, account.password_hash))) {
     return fail("Tu contraseña actual no es correcta.");
   }
-
-  const weak = checkPasswordStrength(parsed.data.password, account.email);
-  if (weak) return fail(weak);
 
   if (await verifyPassword(parsed.data.password, account.password_hash)) {
     return fail("Elige una contraseña distinta de la anterior.");

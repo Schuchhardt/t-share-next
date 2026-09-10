@@ -54,6 +54,7 @@ export default async function CambiarClavePage({ searchParams }: PageProps<"/cam
       intro="Escríbela dos veces y listo. Después entra con ella como siempre."
       submitLabel="Guardar contraseña"
       pendingLabel="Guardando…"
+      newPassword={{ field: "password", confirmField: "passwordConfirm" }}
       footer={
         <>
           ¿Ya la cambiaste? <Link href="/entrar">Entrar</Link>

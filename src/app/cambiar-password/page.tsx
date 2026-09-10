@@ -24,6 +24,7 @@ export default async function CambiarPasswordPage() {
       }
       submitLabel="Guardar contraseña"
       pendingLabel="Guardando…"
+      newPassword={{ field: "password", confirmField: "passwordConfirm" }}
     >
       <Field
         id="currentPassword"

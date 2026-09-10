@@ -3,13 +3,26 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import type { FormState } from "@/lib/auth/actions";
+import { checkNewPassword } from "@/lib/auth/strength";
 
 /**
- * The shell the three account screens share: a heading, a server action, an
- * error region and a submit button that disables itself while the action runs.
+ * The shell the account screens share: a heading, a server action, an error
+ * region and a submit button that disables itself while the action runs.
  *
  * `useActionState` keeps the form working before hydration — the browser
  * posts it, the action runs, and the page comes back with the error rendered.
+ *
+ * `newPassword` names the fields that hold a password being *chosen*, and the
+ * reducer below checks them in the browser before the action is called. That
+ * matters for more than the round trip: the change-password screen also asks
+ * for the current password, and the server has to see both. Without this, a
+ * teacher who picks an unusable password *and* mistypes the old one is told
+ * only about the old one — the wrong field, and the wrong problem. The
+ * actions apply the same rule again server-side; this is a courtesy, not the
+ * guarantee.
+ *
+ * The prop is a plain object rather than a callback because these screens are
+ * Server Components, which cannot hand a function to a client one.
  */
 
 function Submit({ label, pendingLabel }: { label: string; pendingLabel: string }) {
@@ -25,6 +38,14 @@ function Submit({ label, pendingLabel }: { label: string; pendingLabel: string }
   );
 }
 
+/** Which fields hold a password being chosen, so the form can vet them. */
+export type NewPasswordFields = {
+  field: string;
+  confirmField: string;
+  /** The field holding the address, when the form collects one. */
+  emailField?: string;
+};
+
 export function AuthForm({
   action,
   title,
@@ -33,6 +54,7 @@ export function AuthForm({
   pendingLabel,
   children,
   footer,
+  newPassword,
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
   title: string;
@@ -41,8 +63,25 @@ export function AuthForm({
   pendingLabel: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  newPassword?: NewPasswordFields;
 }) {
-  const [state, formAction] = useActionState(action, { error: null });
+  const [state, formAction] = useActionState(
+    async (previous: FormState, formData: FormData): Promise<FormState> => {
+      // Runs in the browser once hydrated; with JavaScript off the form posts
+      // straight to the action and the server catches the same thing.
+      if (newPassword) {
+        const value = (name: string) => String(formData.get(name) ?? "");
+        const problem = checkNewPassword(
+          value(newPassword.field),
+          value(newPassword.confirmField),
+          newPassword.emailField ? value(newPassword.emailField) : undefined,
+        );
+        if (problem) return { error: problem };
+      }
+      return action(previous, formData);
+    },
+    { error: null },
+  );
 
   return (
     <section className="mx-auto max-w-[440px] pt-16 pb-24">

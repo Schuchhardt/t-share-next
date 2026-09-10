@@ -1,11 +1,7 @@
 import bcrypt from "bcryptjs";
 import { describe, expect, it } from "vitest";
-import {
-  checkPasswordStrength,
-  hashPassword,
-  isLegacyHash,
-  verifyPassword,
-} from "@/lib/auth/password";
+import { hashPassword, isLegacyHash, verifyPassword } from "@/lib/auth/password";
+import { checkNewPassword, checkPasswordStrength } from "@/lib/auth/strength";
 
 /**
  * The migration hinges on this file: 2 986 accounts carry a hash written by
@@ -68,5 +64,35 @@ describe("password rules", () => {
 
   it("rejects an absurdly long password rather than hashing it", () => {
     expect(checkPasswordStrength(`a1${"x".repeat(300)}`)).toMatch(/demasiado larga/);
+  });
+});
+
+/**
+ * The browser runs this before the form posts, and the actions run it again.
+ * What it adds over `checkPasswordStrength` is the order of the complaints: a
+ * teacher hears about the password being unusable before hearing that the two
+ * boxes differ.
+ */
+describe("checkNewPassword", () => {
+  it("passes a good password typed twice", () => {
+    expect(checkNewPassword("laclase2026", "laclase2026")).toBeNull();
+  });
+
+  it("asks for one before complaining about anything else", () => {
+    expect(checkNewPassword("", "")).toMatch(/Escribe la contraseña nueva/);
+  });
+
+  it("names the format problem before the mismatch", () => {
+    expect(checkNewPassword("1234567890", "otra-cosa")).toMatch(/letra y un número/);
+  });
+
+  it("catches a password typed differently the second time", () => {
+    expect(checkNewPassword("laclase2026", "laclase2027")).toMatch(/no coinciden/);
+  });
+
+  it("still rejects a password built from the address", () => {
+    expect(checkNewPassword("sebastian2026", "sebastian2026", "sebastian@t-share.org")).toMatch(
+      /tu correo/,
+    );
   });
 });

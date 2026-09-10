@@ -13,6 +13,7 @@ const activity: ActivitySummary = {
   id: 42,
   title: "El post-it positivo",
   learningObjective: "Identificar las cualidades positivas de cada persona.",
+  coverUrl: "https://bucket.s3.amazonaws.com/actividades/avatars/post-it.png?X-Amz-Signature=x",
   durationMinutes: 45,
   createdAt: "2024-05-01T10:00:00Z",
   author: { id: 9, name: "Angela Palma", avatarUrl: null },

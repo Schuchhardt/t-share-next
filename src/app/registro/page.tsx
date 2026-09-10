@@ -12,6 +12,7 @@ export default function RegistroPage() {
       intro="Con una cuenta puedes guardar actividades, descargarlas y publicar las tuyas."
       submitLabel="Crear cuenta"
       pendingLabel="Creando…"
+      newPassword={{ field: "password", confirmField: "passwordConfirm", emailField: "email" }}
       footer={
         <>
           ¿Ya tienes cuenta? <Link href="/entrar">Entrar</Link>

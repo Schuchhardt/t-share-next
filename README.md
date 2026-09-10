@@ -45,8 +45,8 @@ src/
     preview.ts        qué archivos se pueden mostrar sin descargar
     email.ts          envío por SendGrid
     notifications.ts  los tres correos que manda la aplicación
-    auth/             contraseñas, token de sesión, acciones de cuenta,
-                      tokens de recuperación
+    auth/             contraseñas y su formato, token de sesión, acciones de
+                      cuenta, tokens de recuperación
     activity-actions.ts  guardar, descargar, comentar, publicar
     filters.ts        lectura de la query string
     format.ts         strings de presentación
@@ -126,7 +126,7 @@ Angular (`/recuperar-clave` y `/cambiar-clave?token=…`).
 
 ## Tests
 
-`npm test` corre 168 pruebas unitarias sin necesidad de base de datos. Entre
+`npm test` corre 179 pruebas unitarias sin necesidad de base de datos. Entre
 otras cosas fijan el mapeo de la migración contra los CSV reales, la
 verificación de los hashes `$2y$`, el token de sesión, el armado de filtros y el
 formulario de subida.

@@ -36,7 +36,7 @@ const LIVE = { column: "deleted_at", value: null } as const;
  */
 const BASE_SELECT = `
   id, title, learning_objective, duration_minutes, created_at,
-  saved_count, download_count,
+  saved_count, download_count, cover_image_key, cover_image_url,
   author:${T.users} ( id, first_name, last_name, avatar_key, avatar_url ),
   subject_grades:${T.activitySubjectGrades} (
     subject_grade:${T.subjectGrades} (
@@ -63,6 +63,8 @@ type SummaryRow = {
   created_at: string;
   saved_count: number;
   download_count: number;
+  cover_image_key: string | null;
+  cover_image_url: string | null;
   author: {
     id: number;
     first_name: string;
@@ -103,6 +105,10 @@ async function toSummary(row: SummaryRow): Promise<ActivitySummary> {
     id: row.id,
     title: row.title,
     learningObjective: row.learning_objective,
+    // 855 of the 922 live activities carry one, and the old card showed it on
+    // every row. Signing is local crypto, not a round trip, so doing it per
+    // row costs nothing worth optimising away.
+    coverUrl: await fileUrl({ key: row.cover_image_key, url: row.cover_image_url }),
     durationMinutes: row.duration_minutes,
     createdAt: row.created_at,
     author: row.author
@@ -249,7 +255,7 @@ const DETAIL_SELECT = `
     id, name, external_url, file_key, file_url, deleted_at,
     resource_type:${T.resourceTypes} ( id, name )
   ),
-  description, evaluation, rating, cover_image_key, cover_image_url, pdf_key, pdf_url,
+  description, evaluation, rating, pdf_key, pdf_url,
   skills:${T.activitySkills} ( skill:${T.skills} ( id, name ) ),
   units:${T.activityUnits} ( unit:${T.units} ( id, name ) ),
   instructions:${T.activityInstructions} ( id, name, body, external_url, file_key, file_url, deleted_at ),
@@ -260,8 +266,6 @@ type DetailRow = Omit<SummaryRow, "resources"> & {
   description: string | null;
   evaluation: string | null;
   rating: number | null;
-  cover_image_key: string | null;
-  cover_image_url: string | null;
   pdf_key: string | null;
   pdf_url: string | null;
   skills: { skill: { id: number; name: string } | null }[];
@@ -306,8 +310,7 @@ export async function getActivity(id: number): Promise<ActivityDetail | null> {
   const liveMaterials = row.materials.filter((m) => !m.deleted_at);
   const liveInstructions = row.instructions.filter((i) => !i.deleted_at);
 
-  const [coverUrl, pdfUrl, resourceUrls] = await Promise.all([
-    fileUrl({ key: row.cover_image_key, url: row.cover_image_url }),
+  const [pdfUrl, resourceUrls] = await Promise.all([
     fileUrl({ key: row.pdf_key, url: row.pdf_url }),
     Promise.all(liveResources.map((r) => fileUrl({ key: r.file_key, url: r.file_url }))),
   ]);
@@ -340,7 +343,6 @@ export async function getActivity(id: number): Promise<ActivityDetail | null> {
     description: row.description,
     evaluation: row.evaluation,
     rating: row.rating,
-    coverUrl,
     pdfUrl,
     skills: names(row.skills.map((s) => s.skill?.name)),
     units: names(row.units.map((u) => u.unit?.name)),
