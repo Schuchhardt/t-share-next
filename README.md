@@ -66,6 +66,7 @@ Las URLs se mantienen iguales a las del front Angular para no romper enlaces ni 
 | `/actividades/detalle/[id]` | Ficha, documentos, momentos de la clase, comentarios | público |
 | `/actividades/crear` | Publicar una actividad, con subida de archivos | con cuenta |
 | `/mi-perfil` | Subidas y guardadas | con cuenta |
+| `/mi-perfil/editar` | Nombre, foto de perfil y contraseña | con cuenta |
 | `/entrar`, `/registro` | Sesión | visitante |
 | `/cambiar-password` | Cambio de contraseña (forzado tras la migración) | con cuenta |
 | `/recuperar-clave` | Pedir un enlace de recuperación por correo | público |
@@ -126,7 +127,7 @@ Angular (`/recuperar-clave` y `/cambiar-clave?token=…`).
 
 ## Tests
 
-`npm test` corre 179 pruebas unitarias sin necesidad de base de datos. Entre
+`npm test` corre 184 pruebas unitarias sin necesidad de base de datos. Entre
 otras cosas fijan el mapeo de la migración contra los CSV reales, la
 verificación de los hashes `$2y$`, el token de sesión, el armado de filtros y el
 formulario de subida.

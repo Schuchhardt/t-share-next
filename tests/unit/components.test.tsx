@@ -175,7 +175,14 @@ describe("ImagePicker", () => {
   }
 
   it("previews the chosen cover", () => {
-    render(<ImagePicker />);
+    render(
+      <ImagePicker
+        name="cover"
+        label="Portada de la actividad"
+        alt="Vista previa de la portada"
+        hint="Opcional"
+      />,
+    );
     const input = screen.getByLabelText("Portada de la actividad") as HTMLInputElement;
 
     choose(input, new File(["a"], "portada.jpg", { type: "image/jpeg" }));
@@ -186,14 +193,64 @@ describe("ImagePicker", () => {
   });
 
   it("refuses a file that is not an image, and keeps it off the input", () => {
-    render(<ImagePicker />);
+    render(
+      <ImagePicker
+        name="cover"
+        label="Portada de la actividad"
+        alt="Vista previa de la portada"
+        hint="Opcional"
+      />,
+    );
     const input = screen.getByLabelText("Portada de la actividad") as HTMLInputElement;
 
     choose(input, new File(["a"], "planificacion.docx", { type: "" }));
 
-    expect(screen.getByRole("alert")).toHaveTextContent("tiene que ser una imagen");
+    expect(screen.getByRole("alert")).toHaveTextContent("Tiene que ser una imagen");
     expect(input.value).toBe("");
     expect(screen.queryByAltText("Vista previa de la portada")).not.toBeInTheDocument();
+  });
+
+  it("shows the photo the account already has, until a new one is picked", () => {
+    render(
+      <ImagePicker
+        name="avatar"
+        label="Foto de perfil"
+        alt="Tu foto de perfil"
+        hint="Opcional"
+        currentUrl="https://bucket.s3.amazonaws.com/users/avatars/a.jpg?X-Amz-Signature=x"
+      />,
+    );
+
+    const preview = screen.getByAltText("Tu foto de perfil");
+    expect(preview.getAttribute("src")).toContain("/users/avatars/a.jpg");
+    // Nothing has been chosen yet, so there is nothing to undo.
+    expect(screen.queryByRole("button", { name: "Deshacer" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cambiar imagen" })).toBeInTheDocument();
+  });
+
+  it("swaps the existing photo for the picked one, and can undo back to it", async () => {
+    const user = userEvent.setup();
+    render(
+      <ImagePicker
+        name="avatar"
+        label="Foto de perfil"
+        alt="Tu foto de perfil"
+        hint="Opcional"
+        currentUrl="https://bucket.s3.amazonaws.com/users/avatars/a.jpg"
+      />,
+    );
+    const input = screen.getByLabelText("Foto de perfil") as HTMLInputElement;
+
+    choose(input, new File(["a"], "nueva.png", { type: "image/png" }));
+    expect(screen.getByAltText("Tu foto de perfil").getAttribute("src")).toMatch(/^blob:/);
+
+    await user.click(screen.getByRole("button", { name: "Deshacer" }));
+
+    // Back to the stored photo, and the input no longer carries a file.
+    expect(screen.getByAltText("Tu foto de perfil").getAttribute("src")).toContain(
+      "/users/avatars/a.jpg",
+    );
+    expect(input.value).toBe("");
   });
 });
 

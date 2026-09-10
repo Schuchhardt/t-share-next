@@ -96,6 +96,34 @@ export async function setPassword(userId: number, passwordHash: string): Promise
   if (error) throw new Error(`set password: ${error.message}`);
 }
 
+/**
+ * Writes what the "Editar perfil" screen owns. Only the keys handed in are
+ * touched, so leaving the photo alone means not passing it — a teacher who
+ * only renames themselves keeps the avatar they had.
+ */
+export async function updateProfile(
+  userId: number,
+  fields: {
+    firstName: string;
+    lastName: string | null;
+    avatarKey?: string;
+    avatarUrl?: string | null;
+  },
+): Promise<void> {
+  const patch: Record<string, unknown> = {
+    first_name: fields.firstName,
+    last_name: fields.lastName,
+    updated_at: new Date().toISOString(),
+  };
+  if (fields.avatarKey !== undefined) {
+    patch.avatar_key = fields.avatarKey;
+    patch.avatar_url = fields.avatarUrl ?? null;
+  }
+
+  const { error } = await db().from(T.users).update(patch).eq("id", userId);
+  if (error) throw new Error(`update profile: ${error.message}`);
+}
+
 export async function recordLogin(userId: number): Promise<void> {
   const { error } = await db()
     .from(T.users)

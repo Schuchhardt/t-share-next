@@ -215,7 +215,12 @@ export function CreateActivityForm({
         </div>
       )}
 
-      <ImagePicker />
+      <ImagePicker
+        name="cover"
+        label="Portada"
+        alt="Vista previa de la portada"
+        hint="Opcional · JPG o PNG, hasta 8 MB"
+      />
 
       <FileDropzone />
 

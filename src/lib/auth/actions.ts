@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
 import { hashPassword, isLegacyHash, verifyPassword } from "@/lib/auth/password";
+import { safeNext } from "@/lib/auth/next-path";
 import { checkPasswordStrength } from "@/lib/auth/strength";
 import {
   createPasswordReset,
@@ -63,23 +64,11 @@ const emailField = z
 const signInSchema = z.object({
   email: emailField,
   password: z.string().min(1, "Escribe tu contraseña."),
-  next: z.string().optional(),
+  next: z.string().nullish(),
 });
 
 function displayName(account: AccountRow): string {
   return [account.first_name, account.last_name].filter(Boolean).join(" ").trim() || account.email;
-}
-
-/**
- * A redirect inside a server action throws a control-flow error that Next.js
- * catches, so it must happen outside the try/catch that turns failures into
- * form state.
- */
-function safeNext(next: string | undefined): string {
-  // Only same-origin paths, so a crafted ?next= cannot bounce a signed-in
-  // teacher to another site.
-  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/actividades";
-  return next;
 }
 
 export async function signIn(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -171,7 +160,10 @@ const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, "Escribe tu contraseña actual."),
     password: z.string(),
+    // `formData.get` answers null for a field the form does not have, and the
+    // forced screen has no `next`. Optional alone would reject that null.
     passwordConfirm: z.string(),
+    next: z.string().nullish(),
   })
   .refine((v) => v.password === v.passwordConfirm, {
     message: "Las contraseñas no coinciden.",
@@ -189,6 +181,7 @@ export async function changePassword(_prev: FormState, formData: FormData): Prom
     currentPassword: formData.get("currentPassword"),
     password: formData.get("password"),
     passwordConfirm: formData.get("passwordConfirm"),
+    next: formData.get("next"),
   });
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Revisa los datos.");
 
@@ -215,7 +208,9 @@ export async function changePassword(_prev: FormState, formData: FormData): Prom
   await setPassword(session.userId, await hashPassword(parsed.data.password));
   await setSessionCookie({ ...session, mustChangePassword: false });
 
-  redirect("/actividades");
+  // The forced screen sends everyone to the repository; the profile sends them
+  // back to the profile. `safeNext` keeps a crafted value same-origin.
+  redirect(safeNext(parsed.data.next));
 }
 
 // ---------------------------------------------------------------------------

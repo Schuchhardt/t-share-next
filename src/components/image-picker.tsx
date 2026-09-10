@@ -5,21 +5,45 @@ import { formatSize } from "@/components/file-dropzone";
 import { previewKindForFile } from "@/lib/preview";
 
 /**
- * The activity cover — `actividades.avatar` on the old table, picked in step 2
- * of the Angular form, which only showed the chosen file's name. This shows
- * the image itself.
+ * Picking one image, with the image itself as the preview.
  *
- * Like the dropzone, the `<input type="file">` stays the source of truth so
- * the surrounding form posts the file in its own multipart body. The preview
- * is an object URL minted when the file is chosen and revoked as soon as it is
- * replaced or cleared, so at most one blob is alive at a time.
+ * Used twice: the activity cover on the upload form — step 2 of the Angular
+ * form, which only showed the chosen file's name — and the profile photo,
+ * where the old "Editar perfil" screen showed a "Sin imagen" placeholder.
+ *
+ * The `<input type="file">` stays the source of truth so the surrounding form
+ * posts the file in its own multipart body. The preview is an object URL
+ * minted when the file is chosen and revoked as soon as it is replaced or
+ * cleared, so at most one blob is alive at a time.
+ *
+ * `currentUrl` is what the account already has: it fills the frame until a new
+ * file is chosen, and "Quitar" falls back to it rather than to the empty
+ * state — this component picks a replacement, it does not delete.
  */
 
 const MAX_BYTES = 8 * 1024 * 1024;
 
 type Picked = { file: File; url: string };
 
-export function ImagePicker() {
+export function ImagePicker({
+  name,
+  label,
+  hint,
+  alt,
+  currentUrl = null,
+  round = false,
+}: {
+  /** The field name the form posts under. */
+  name: string;
+  label: string;
+  /** Shown while nothing is picked, next to the button. */
+  hint: string;
+  /** Alt text for the preview. */
+  alt: string;
+  currentUrl?: string | null;
+  /** Profile photos are round; activity covers are not. */
+  round?: boolean;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [picked, setPicked] = useState<Picked | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +68,7 @@ export function ImagePicker() {
     if (!chosen) return;
 
     if (previewKindForFile(chosen) !== "image") {
-      setError("La portada tiene que ser una imagen: JPG, PNG, GIF o WEBP.");
+      setError("Tiene que ser una imagen: JPG, PNG, GIF o WEBP.");
       clear();
       return;
     }
@@ -61,21 +85,23 @@ export function ImagePicker() {
     setPicked({ file: chosen, url });
   }
 
+  const showing = picked?.url ?? currentUrl;
+
   return (
     <div className="grid gap-2.5">
-      <span className="eyebrow">Portada</span>
+      <span className="eyebrow">{label}</span>
 
       <div className="flex flex-wrap items-center gap-4">
-        <div className="grid size-[104px] shrink-0 place-items-center overflow-hidden rounded-md border-[1.5px] border-dashed border-indigo bg-white">
-          {picked ? (
+        <div
+          className={`grid size-[104px] shrink-0 place-items-center overflow-hidden border-[1.5px] border-dashed border-indigo bg-white ${
+            round ? "rounded-full" : "rounded-md"
+          }`}
+        >
+          {showing ? (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={picked.url}
-              alt="Vista previa de la portada"
-              className="size-full object-cover"
-            />
+            <img src={showing} alt={alt} className="size-full object-cover" />
           ) : (
-            <span className="px-2 text-center text-xs text-muted">Sin portada</span>
+            <span className="px-2 text-center text-xs text-muted">Sin imagen</span>
           )}
         </div>
 
@@ -86,7 +112,7 @@ export function ImagePicker() {
               onClick={() => inputRef.current?.click()}
               className="rounded-sm border-[1.5px] border-indigo bg-transparent px-[18px] py-2.5 text-sm font-semibold text-indigo transition-colors hover:bg-lav"
             >
-              {picked ? "Cambiar imagen" : "Elegir imagen"}
+              {showing ? "Cambiar imagen" : "Elegir imagen"}
             </button>
             {picked && (
               <button
@@ -97,14 +123,12 @@ export function ImagePicker() {
                 }}
                 className="border-none bg-transparent p-0 text-sm font-medium text-indigo hover:underline"
               >
-                Quitar
+                {currentUrl ? "Deshacer" : "Quitar"}
               </button>
             )}
           </div>
           <span className="text-sm text-muted">
-            {picked
-              ? `${picked.file.name} · ${formatSize(picked.file.size)}`
-              : "Opcional · JPG o PNG, hasta 8 MB"}
+            {picked ? `${picked.file.name} · ${formatSize(picked.file.size)}` : hint}
           </span>
         </div>
       </div>
@@ -112,11 +136,11 @@ export function ImagePicker() {
       <input
         ref={inputRef}
         type="file"
-        name="cover"
+        name={name}
         accept="image/jpeg,image/png,image/gif,image/webp"
         onChange={(e) => pick(e.target.files?.[0])}
         className="sr-only"
-        aria-label="Portada de la actividad"
+        aria-label={label}
       />
 
       {error && (
