@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Raleway:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+<style>
+  body { margin: 0; background: #FFFFFF; }
+  * { box-sizing: border-box; }
+  a { color: #3D3B96; text-decoration: none; }
+  a:hover { color: #2B2A55; text-decoration: underline; }
+  input, textarea, select, button { font-family: inherit; }
+  input:focus, textarea:focus, select:focus { outline: 2px solid #3D3B96; outline-offset: -1px; }
+</style>
+</helmet>
+<div style="min-height:100vh;background:#FFFFFF;color:#2B2A55;font-family:Raleway,system-ui,sans-serif;font-size:16px;line-height:1.5">
+
+  <header style="position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:28px;flex-wrap:wrap;padding:12px 28px;background:rgba(255,255,255,0.95);backdrop-filter:blur(8px);border-bottom:1px solid #E2E1F0">
+    <img src="tshare-logo.svg" alt="T-share" onClick="{{ goHome }}" style="height:42px;width:auto;cursor:pointer" />
+    <nav style="display:flex;gap:2px;flex:1">
+      <sc-for list="{{ nav }}" as="n" hint-placeholder-count="4">
+        <button onClick="{{ n.go }}" style="background:none;border:none;padding:8px 12px;font-size:15px;font-weight:{{ n.weight }};color:{{ n.color }};border-bottom:2px solid {{ n.line }};cursor:pointer" style-hover="color:#3D3B96">{{ n.label }}</button>
+      </sc-for>
+    </nav>
+    <button onClick="{{ goUpload }}" style="padding:10px 18px;background:#5FC79A;color:#1F2440;border:none;border-radius:4px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#4CB689">Subir actividad</button>
+    <div onClick="{{ goProfile }}" style="display:flex;align-items:center;gap:9px;font-size:14px;color:#6E6C8F;cursor:pointer">
+      <span style="width:30px;height:30px;border-radius:50%;background:#EDECFB;color:#3D3B96;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600">SS</span>
+      Sebastián
+    </div>
+  </header>
+
+  <main style="width:100%;max-width:1060px;margin:0 auto;padding:0 28px 120px">
+
+    <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+      <section style="padding:80px 0 40px;max-width:640px">
+        <h1 style="margin:0 0 18px;font-size:54px;font-weight:700;line-height:1.05;letter-spacing:-0.02em;text-wrap:pretty">Actividades de clase, listas para usar.</h1>
+        <p style="margin:0;font-size:19px;line-height:1.55;color:#6E6C8F;max-width:48ch;text-wrap:pretty">Un repositorio de actividades hechas por profesores. Busca por nivel, asignatura u objetivo de aprendizaje, y descarga los documentos.</p>
+      </section>
+
+      <section style="display:flex;max-width:700px;border:1.5px solid #3D3B96;border-radius:6px;overflow:hidden;background:#FFFFFF">
+        <input value="{{ q }}" onChange="{{ setQ }}" onKeyDown="{{ onEnter }}" placeholder="Fracciones, comprensión lectora, 5° básico…" style="flex:1;min-width:0;padding:17px 20px;border:none;background:transparent;font-size:17px;color:#2B2A55" />
+        <button onClick="{{ goSearch }}" style="padding:0 28px;background:#3D3B96;color:#FFFFFF;border:none;font-size:16px;font-weight:600;cursor:pointer" style-hover="background:#2B2A55">Buscar</button>
+      </section>
+
+      <section style="display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;max-width:700px">
+        <sc-for list="{{ quickAsig }}" as="a" hint-placeholder-count="6">
+          <button onClick="{{ a.go }}" style="padding:7px 14px;background:#EDECFB;border:none;border-radius:999px;color:#3D3B96;font-size:14px;font-weight:500;cursor:pointer" style-hover="background:#DEDCF7">{{ a.label }}</button>
+        </sc-for>
+      </section>
+
+      <section style="margin-top:80px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;border-bottom:1.5px solid #2B2A55;padding-bottom:10px">
+          <h2 style="margin:0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#6E6C8F">Agregadas recientemente</h2>
+          <button onClick="{{ goSearch }}" style="background:none;border:none;padding:0;font-size:14px;font-weight:500;color:#3D3B96;cursor:pointer">Ver todas ({{ totalCount }})</button>
+        </div>
+        <sc-for list="{{ recent }}" as="r" hint-placeholder-count="4">
+          <div onClick="{{ r.open }}" style="display:grid;gap:5px;padding:20px 16px 20px 0;border-bottom:1px solid #E2E1F0;cursor:pointer" style-hover="background:#F7F7FD">
+            <div style="font-size:13px;font-weight:600;letter-spacing:0.04em;color:#6E6C8F">{{ r.meta }}</div>
+            <div style="font-size:23px;font-weight:600;line-height:1.25">{{ r.title }}</div>
+            <div style="font-size:15px;color:#6E6C8F;max-width:70ch;text-wrap:pretty">{{ r.oa }}</div>
+            <div style="font-size:13px;font-weight:500;color:#3D3B96">{{ r.docsLine }}</div>
+          </div>
+        </sc-for>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{ isSearch }}" hint-placeholder-val="{{ false }}">
+      <section style="padding:36px 0 26px">
+        <div style="display:flex;max-width:700px;border:1.5px solid #3D3B96;border-radius:6px;overflow:hidden;background:#FFFFFF">
+          <input value="{{ q }}" onChange="{{ setQ }}" placeholder="Buscar actividades…" style="flex:1;min-width:0;padding:13px 18px;border:none;background:transparent;font-size:16px;color:#2B2A55" />
+          <button style="padding:0 22px;background:#3D3B96;color:#FFFFFF;border:none;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#2B2A55">Buscar</button>
+        </div>
+      </section>
+
+      <section style="display:grid;grid-template-columns:minmax(0,220px) minmax(0,1fr);gap:52px;align-items:start">
+        <div style="display:grid;gap:26px;position:sticky;top:86px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;border-bottom:1.5px solid #2B2A55;padding-bottom:8px">
+            <span style="font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#6E6C8F">Filtros</span>
+            <button onClick="{{ clearFilters }}" style="background:none;border:none;padding:0;font-size:13px;color:#3D3B96;cursor:pointer">Limpiar</button>
+          </div>
+          <sc-for list="{{ filterGroups }}" as="g" hint-placeholder-count="4">
+            <div style="display:grid;gap:9px">
+              <div style="font-size:14px;font-weight:700">{{ g.name }}</div>
+              <sc-for list="{{ g.opts }}" as="o" hint-placeholder-count="5">
+                <label style="display:flex;align-items:flex-start;gap:9px;font-size:14px;color:#6E6C8F;cursor:pointer" style-hover="color:#2B2A55">
+                  <input type="checkbox" checked="{{ o.on }}" onChange="{{ o.toggle }}" style="margin:3px 0 0;accent-color:#3D3B96" />
+                  <span>{{ o.label }}</span>
+                </label>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+
+        <div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:12px;border-bottom:1.5px solid #2B2A55;padding-bottom:10px">
+            <span style="font-size:14px;font-weight:600;color:#6E6C8F">{{ resultLabel }}</span>
+            <div style="display:flex;gap:14px">
+              <sc-for list="{{ sortOpts }}" as="s" hint-placeholder-count="2">
+                <button onClick="{{ s.go }}" style="background:none;border:none;padding:0;font-size:14px;font-weight:{{ s.weight }};color:{{ s.color }};cursor:pointer">{{ s.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+          <sc-for list="{{ results }}" as="r" hint-placeholder-count="5">
+            <div onClick="{{ r.open }}" style="display:grid;gap:5px;padding:18px 16px 18px 0;border-bottom:1px solid #E2E1F0;cursor:pointer" style-hover="background:#F7F7FD">
+              <div style="font-size:13px;font-weight:600;letter-spacing:0.04em;color:#6E6C8F">{{ r.meta }}</div>
+              <div style="font-size:22px;font-weight:600;line-height:1.25">{{ r.title }}</div>
+              <div style="font-size:15px;color:#6E6C8F;max-width:70ch;text-wrap:pretty">{{ r.oa }}</div>
+              <div style="font-size:13px;font-weight:500;color:#3D3B96">{{ r.docsLine }}</div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:52px 0;color:#6E6C8F;font-size:16px">No hay actividades con esos filtros. <button onClick="{{ clearFilters }}" style="background:none;border:none;padding:0;font-size:16px;color:#3D3B96;cursor:pointer">Limpiar filtros</button></div>
+          </sc-if>
+        </div>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+      <section style="padding:30px 0 0">
+        <button onClick="{{ goSearch }}" style="background:none;border:none;padding:0;font-size:14px;color:#3D3B96;cursor:pointer">← Volver a resultados</button>
+      </section>
+      <section style="padding:22px 0 32px;border-bottom:1.5px solid #2B2A55">
+        <div style="font-size:13px;font-weight:600;letter-spacing:0.04em;color:#6E6C8F">{{ act.meta }}</div>
+        <h1 style="margin:10px 0 14px;font-size:42px;font-weight:700;line-height:1.1;letter-spacing:-0.015em;max-width:26ch;text-wrap:pretty">{{ act.title }}</h1>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:18px">
+          <span style="flex:0 0 auto;font-size:15px;color:#6E6C8F">Creada por <a href="#">{{ act.autor }}</a></span>
+          <div style="display:flex;gap:10px">
+            <button onClick="{{ toggleSave }}" style="padding:9px 16px;background:{{ saveBg }};color:{{ saveColor }};border:1.5px solid {{ saveBorder }};border-radius:4px;font-size:14px;font-weight:600;cursor:pointer">{{ saveLabel }}</button>
+            <button style="padding:9px 16px;background:transparent;color:#3D3B96;border:1.5px solid #3D3B96;border-radius:4px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#EDECFB">Compartir</button>
+          </div>
+        </div>
+      </section>
+      <section style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,320px);gap:52px;align-items:start;padding-top:34px">
+        <div style="display:grid;gap:30px">
+          <div style="display:grid;gap:8px">
+            <span style="font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#6E6C8F">Objetivo de aprendizaje</span>
+            <p style="margin:0;font-size:21px;font-weight:500;line-height:1.45;text-wrap:pretty">{{ act.oa }}</p>
+          </div>
+          <div style="display:grid;gap:8px">
+            <span style="font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#6E6C8F">Descripción</span>
+            <p style="margin:0;font-size:16px;line-height:1.65;color:#4A4870;max-width:66ch;text-wrap:pretty">{{ act.desc }}</p>
+          </div>
+          <div style="display:grid;gap:8px">
+            <span style="font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#6E6C8F">Momentos de la clase</span>
+            <sc-for list="{{ act.pasos }}" as="p" hint-placeholder-count="3">
+              <div style="display:grid;grid-template-columns:100px minmax(0,1fr);gap:16px;padding:12px 0;border-bottom:1px solid #E2E1F0">
+                <span style="font-size:14px;font-weight:600;color:#3D3B96">{{ p.name }}</span>
+                <span style="font-size:15px;line-height:1.6;color:#4A4870;text-wrap:pretty">{{ p.text }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:grid;gap:8px">
+            <span style="font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#6E6C8F">Evaluación</span>
+            <p style="margin:0;font-size:16px;line-height:1.65;color:#4A4870;max-width:66ch;text-wrap:pretty">{{ act.evaluacion }}</p>
+          </div>
+        </div>
+
+        <aside style="display:grid;gap:26px;position:sticky;top:86px">
+          <div style="display:grid;gap:8px;padding:20px;background:#E4F0E9;border-radius:6px">
+            <span style="font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#3B6B55">Documentos</span>
+            <sc-for list="{{ act.docs }}" as="d" hint-placeholder-count="3">
+              <a href="#" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:11px 0;border-top:1px solid #C6DDD1;text-decoration:none;color:#2B2A55">
+                <span style="display:grid;gap:2px">
+                  <span style="font-size:15px;font-weight:500">{{ d.name }}</span>
+                  <span style="font-size:12px;color:#4F7A66">{{ d.meta }}</span>
+                </span>
+                <span style="font-size:14px;font-weight:600;color:#2B5E48">Descargar ↓</span>
+              </a>
+            </sc-for>
+            <button style="margin-top:8px;padding:12px;background:#3D3B96;color:#FFFFFF;border:none;border-radius:4px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#2B2A55">Descargar todo ({{ act.docsSize }})</button>
+          </div>
+          <div style="display:grid;gap:8px">
+            <span style="font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#6E6C8F">Ficha</span>
+            <sc-for list="{{ act.ficha }}" as="f" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;padding:8px 0;border-top:1px solid #E2E1F0;font-size:14px">
+                <span style="color:#6E6C8F">{{ f.k }}</span>
+                <span>{{ f.v }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:grid;gap:8px">
+            <span style="font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#6E6C8F">Materiales</span>
+            <sc-for list="{{ act.materiales }}" as="m" hint-placeholder-count="3">
+              <div style="padding:8px 0;border-top:1px solid #E2E1F0;font-size:14px;color:#4A4870">{{ m }}</div>
+            </sc-for>
+          </div>
+        </aside>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{ isUpload }}" hint-placeholder-val="{{ false }}">
+      <section style="padding:52px 0 30px;max-width:660px">
+        <h1 style="margin:0 0 12px;font-size:42px;font-weight:700;line-height:1.1;letter-spacing:-0.015em">Subir una actividad</h1>
+        <p style="margin:0;font-size:17px;color:#6E6C8F;max-width:52ch;text-wrap:pretty">Todo en una sola página, sin pasos. Lo único obligatorio es el título, la asignatura y el nivel.</p>
+      </section>
+      <section style="display:grid;gap:34px;max-width:760px">
+        <div style="display:grid;gap:18px;padding:26px;background:#EDECFB;border-radius:6px">
+          <div style="display:grid;gap:7px">
+            <label style="font-size:14px;font-weight:700">Título de la actividad</label>
+            <input placeholder="Ej. Representar porcentajes con material concreto" style="padding:13px 14px;border:1px solid #C9C7E8;border-radius:4px;background:#FFFFFF;font-size:16px" />
+          </div>
+          <div style="display:grid;gap:7px">
+            <label style="font-size:14px;font-weight:700">Objetivo de aprendizaje</label>
+            <input placeholder="Ej. Representar porcentajes como fracción y decimal" style="padding:13px 14px;border:1px solid #C9C7E8;border-radius:4px;background:#FFFFFF;font-size:16px" />
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:18px">
+            <div style="display:grid;gap:7px">
+              <label style="font-size:14px;font-weight:700">Asignatura</label>
+              <select style="padding:13px 14px;border:1px solid #C9C7E8;border-radius:4px;background:#FFFFFF;font-size:16px">
+                <option>Matemática</option>
+                <option>Lenguaje y Comunicación</option>
+                <option>Ciencias Naturales</option>
+                <option>Historia y Geografía</option>
+                <option>Artes Visuales</option>
+                <option>Educación Física y Salud</option>
+                <option>Inglés</option>
+                <option>Orientación</option>
+              </select>
+            </div>
+            <div style="display:grid;gap:7px">
+              <label style="font-size:14px;font-weight:700">Nivel</label>
+              <select style="padding:13px 14px;border:1px solid #C9C7E8;border-radius:4px;background:#FFFFFF;font-size:16px">
+                <option>Educación Parvularia</option>
+                <option>1° a 2° básico</option>
+                <option>3° a 4° básico</option>
+                <option>5° a 6° básico</option>
+                <option>7° a 8° básico</option>
+                <option>Enseñanza media</option>
+              </select>
+            </div>
+            <div style="display:grid;gap:7px">
+              <label style="font-size:14px;font-weight:700">Duración (min)</label>
+              <input placeholder="45" style="padding:13px 14px;border:1px solid #C9C7E8;border-radius:4px;background:#FFFFFF;font-size:16px" />
+            </div>
+          </div>
+          <div style="display:grid;gap:7px">
+            <label style="font-size:14px;font-weight:700">Descripción <span style="font-weight:400;color:#6E6C8F">— opcional</span></label>
+            <textarea rows="4" placeholder="En qué consiste la actividad y cómo se aplica en la sala." style="padding:13px 14px;border:1px solid #C9C7E8;border-radius:4px;background:#FFFFFF;font-size:16px;resize:vertical"></textarea>
+          </div>
+        </div>
+
+        <div style="display:grid;gap:10px">
+          <span style="font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#6E6C8F">Documentos</span>
+          <div style="display:grid;gap:8px;justify-items:center;padding:40px;border:1.5px dashed #3D3B96;border-radius:6px;background:#FFFFFF;text-align:center">
+            <span style="font-size:16px;font-weight:600">Arrastra guías, PPT o rúbricas aquí</span>
+            <span style="font-size:14px;color:#6E6C8F">PDF, DOCX, PPTX, JPG · hasta 25 MB por archivo</span>
+            <button style="margin-top:8px;padding:10px 18px;background:transparent;border:1.5px solid #3D3B96;border-radius:4px;color:#3D3B96;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#EDECFB">Elegir archivos</button>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding-top:6px;border-top:1px solid #E2E1F0">
+          <button style="padding:13px 24px;background:#5FC79A;color:#1F2440;border:none;border-radius:4px;font-size:15px;font-weight:700;cursor:pointer" style-hover="background:#4CB689">Publicar actividad</button>
+          <button style="padding:13px 24px;background:transparent;border:1.5px solid #C9C7E8;border-radius:4px;color:#3D3B96;font-size:15px;font-weight:600;cursor:pointer" style-hover="border-color:#3D3B96">Guardar borrador</button>
+          <span style="font-size:14px;color:#6E6C8F">Se publica con tu nombre y queda visible para todos los profesores.</span>
+        </div>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{ isProfile }}" hint-placeholder-val="{{ false }}">
+      <section style="padding:52px 0 26px;display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:22px;border-bottom:1.5px solid #2B2A55">
+        <div>
+          <div style="font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#6E6C8F">Profesor · Matemática</div>
+          <h1 style="margin:8px 0 6px;font-size:40px;font-weight:700;line-height:1.1;letter-spacing:-0.015em">Sebastián Schuchhardt</h1>
+          <p style="margin:0;font-size:15px;color:#6E6C8F">{{ profileLine }}</p>
+        </div>
+        <button onClick="{{ goUpload }}" style="padding:11px 20px;background:#5FC79A;color:#1F2440;border:none;border-radius:4px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#4CB689">Subir actividad</button>
+      </section>
+      <section style="display:flex;gap:24px;padding:18px 0 0">
+        <sc-for list="{{ profileTabs }}" as="t" hint-placeholder-count="2">
+          <button onClick="{{ t.go }}" style="background:none;border:none;padding:8px 0;font-size:16px;font-weight:{{ t.weight }};color:{{ t.color }};border-bottom:2px solid {{ t.line }};cursor:pointer">{{ t.label }}</button>
+        </sc-for>
+      </section>
+      <section>
+        <sc-for list="{{ profileList }}" as="r" hint-placeholder-count="3">
+          <div onClick="{{ r.open }}" style="display:grid;gap:5px;padding:18px 16px 18px 0;border-bottom:1px solid #E2E1F0;cursor:pointer" style-hover="background:#F7F7FD">
+            <div style="font-size:13px;font-weight:600;letter-spacing:0.04em;color:#6E6C8F">{{ r.meta }}</div>
+            <div style="font-size:22px;font-weight:600;line-height:1.25">{{ r.title }}</div>
+            <div style="font-size:13px;font-weight:500;color:#3D3B96">{{ r.docsLine }}</div>
+          </div>
+        </sc-for>
+        <sc-if value="{{ profileEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:56px 0;font-size:16px;color:#6E6C8F">Todavía no guardas actividades. <button onClick="{{ goSearch }}" style="background:none;border:none;padding:0;font-size:16px;color:#3D3B96;cursor:pointer">Explorar el repositorio</button></div>
+        </sc-if>
+      </section>
+    </sc-if>
+
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+const ACTS = [
+  { id: 1, title: "Representar porcentajes con material concreto", asignatura: "Matemática", nivel: "5° a 6° básico", min: 45,
+    oa: "Representar porcentajes como fracción y número decimal usando material concreto y diagramas de área.",
+    autor: "Andrea Muñoz",
+    desc: "Los estudiantes construyen una tabla de equivalencias entre diagrama, fracción, decimal y porcentaje. Trabajan en parejas con una cuadrícula de 100 casilleros y registran sus resultados en la guía.",
+    tipos: ["Guía", "PPT"],
+    docs: [
+      { name: "Guía del estudiante.pdf", meta: "PDF · 2 páginas · 480 KB" },
+      { name: "Tabla de equivalencias.pptx", meta: "PPTX · 6 diapositivas · 1,2 MB" },
+      { name: "Rúbrica de evaluación.docx", meta: "DOCX · 1 página · 62 KB" }
+    ],
+    docsSize: "1,7 MB",
+    materiales: ["Cuadrícula de 100 casilleros impresa", "Lápices de dos colores", "Proyector (opcional)"],
+    pasos: [
+      { name: "Inicio", text: "Se muestra una cuadrícula pintada y se pregunta cuánto está pintado. Se recogen respuestas en fracción y en porcentaje." },
+      { name: "Desarrollo", text: "En parejas completan la tabla de equivalencias para seis casos y comparan resultados con otra pareja." },
+      { name: "Cierre", text: "Puesta en común: se define cuándo conviene usar porcentaje y cuándo fracción." }
+    ],
+    evaluacion: "Completa la tabla con las cuatro representaciones correctas en al menos cinco de los seis casos y explica una equivalencia con sus palabras." },
+  { id: 2, title: "Mi cuerpo me avisa", asignatura: "Orientación", nivel: "Educación Parvularia", min: 25,
+    oa: "Identificar señales corporales asociadas a emociones intensas y aplicar estrategias simples para calmarse.",
+    autor: "MUUD",
+    desc: "Actividad de autoconocimiento corporal y regulación emocional para trabajar en círculo, con tarjetas de señales del cuerpo.",
+    tipos: ["Guía", "Imágenes"],
+    docs: [
+      { name: "Tarjetas de señales corporales.pdf", meta: "PDF · 8 tarjetas · 3,4 MB" },
+      { name: "Guía para la educadora.pdf", meta: "PDF · 3 páginas · 520 KB" }
+    ],
+    docsSize: "3,9 MB",
+    materiales: ["Tarjetas impresas y recortadas", "Espacio para círculo", "Música suave"],
+    pasos: [
+      { name: "Inicio", text: "En círculo, cada niño muestra con su cuerpo cómo se siente hoy." },
+      { name: "Desarrollo", text: "Se presentan las tarjetas de señales corporales y se practican tres estrategias de calma." },
+      { name: "Cierre", text: "Cada niño elige la estrategia que más le sirvió y la nombra." }
+    ],
+    evaluacion: "Reconoce al menos dos señales corporales de una emoción intensa y nombra una estrategia para calmarse." },
+  { id: 3, title: "El juego de la tortuga y el conejo", asignatura: "Orientación", nivel: "Educación Parvularia", min: 30,
+    oa: "Practicar turnos y espera activa a través de un juego de movimiento con reglas simples.",
+    autor: "MUUD",
+    desc: "Juego motor con dos ritmos contrapuestos para trabajar autorregulación y respeto de turnos.",
+    tipos: ["Guía"],
+    docs: [{ name: "Instrucciones del juego.pdf", meta: "PDF · 2 páginas · 310 KB" }],
+    docsSize: "310 KB",
+    materiales: ["Patio o sala despejada", "Dos tarjetas de rol"],
+    pasos: [
+      { name: "Inicio", text: "Se explican los dos ritmos: tortuga y conejo." },
+      { name: "Desarrollo", text: "Rondas de tres minutos alternando roles, con pausa para comentar qué costó más." },
+      { name: "Cierre", text: "Se conversa sobre situaciones de la sala donde conviene ir 'a paso de tortuga'." }
+    ],
+    evaluacion: "Respeta el turno en al menos dos rondas completas sin recordatorios del adulto." },
+  { id: 4, title: "Comprensión lectora: inferir el propósito del autor", asignatura: "Lenguaje y Comunicación", nivel: "7° a 8° básico", min: 60,
+    oa: "Inferir el propósito comunicativo de un texto no literario a partir de marcas textuales.",
+    autor: "Paula Rivas",
+    desc: "Dos textos breves sobre el mismo tema con propósitos distintos. Los estudiantes contrastan marcas de opinión y de información.",
+    tipos: ["Guía", "Rúbrica"],
+    docs: [
+      { name: "Set de textos.pdf", meta: "PDF · 4 páginas · 640 KB" },
+      { name: "Guía de trabajo.docx", meta: "DOCX · 2 páginas · 88 KB" },
+      { name: "Rúbrica.pdf", meta: "PDF · 1 página · 120 KB" }
+    ],
+    docsSize: "848 KB",
+    materiales: ["Copias del set de textos", "Destacadores"],
+    pasos: [
+      { name: "Inicio", text: "Lectura en voz alta del primer texto y registro de primeras impresiones." },
+      { name: "Desarrollo", text: "En grupos marcan expresiones que revelan el propósito y completan el cuadro comparativo." },
+      { name: "Cierre", text: "Cada grupo defiende su interpretación con dos marcas textuales." }
+    ],
+    evaluacion: "Identifica el propósito de ambos textos y lo justifica con al menos dos marcas textuales por texto." },
+  { id: 5, title: "Ciclo del agua con maqueta de invernadero", asignatura: "Ciencias Naturales", nivel: "3° a 4° básico", min: 90,
+    oa: "Describir las etapas del ciclo del agua a partir de la observación de un modelo cerrado.",
+    autor: "Rodrigo Salas",
+    desc: "Construcción de un invernadero en una botella para observar evaporación y condensación durante una semana.",
+    tipos: ["Guía", "Video"],
+    docs: [
+      { name: "Instrucciones de armado.pdf", meta: "PDF · 3 páginas · 700 KB" },
+      { name: "Bitácora de observación.pdf", meta: "PDF · 2 páginas · 240 KB" },
+      { name: "Video de armado.mp4", meta: "MP4 · 4 min · 18 MB" }
+    ],
+    docsSize: "19 MB",
+    materiales: ["Botellas plásticas de 2 L", "Tierra y semillas", "Agua", "Cinta adhesiva"],
+    pasos: [
+      { name: "Inicio", text: "Se pregunta cómo llega el agua a las nubes y se registran hipótesis." },
+      { name: "Desarrollo", text: "Armado de la maqueta en grupos y primera observación registrada en la bitácora." },
+      { name: "Cierre", text: "Al final de la semana se comparan hipótesis iniciales con lo observado." }
+    ],
+    evaluacion: "Describe evaporación y condensación en el modelo y las relaciona con el ciclo del agua real." },
+  { id: 6, title: "Línea de tiempo colaborativa: siglo XX en Chile", asignatura: "Historia y Geografía", nivel: "Enseñanza media", min: 60,
+    oa: "Ubicar temporalmente procesos clave del siglo XX chileno y establecer relaciones de causa y consecuencia.",
+    autor: "Carolina Pérez",
+    desc: "Cada grupo trabaja una década, la sintetiza en tres hitos y la monta en una línea de tiempo mural.",
+    tipos: ["PPT", "Guía"],
+    docs: [
+      { name: "Set de fichas por década.pptx", meta: "PPTX · 12 diapositivas · 4,1 MB" },
+      { name: "Guía de síntesis.pdf", meta: "PDF · 2 páginas · 260 KB" }
+    ],
+    docsSize: "4,4 MB",
+    materiales: ["Papel kraft", "Plumones", "Fichas impresas"],
+    pasos: [
+      { name: "Inicio", text: "Se presenta la línea vacía y el criterio de selección de hitos." },
+      { name: "Desarrollo", text: "Trabajo por grupos en su década y montaje en el mural." },
+      { name: "Cierre", text: "Recorrido guiado por la línea completa identificando dos relaciones causales." }
+    ],
+    evaluacion: "Ubica correctamente sus tres hitos y explica una relación de causa y consecuencia con otra década." }
+];
+
+const NIVELES = ["Educación Parvularia", "1° a 2° básico", "3° a 4° básico", "5° a 6° básico", "7° a 8° básico", "Enseñanza media"];
+const ASIGNATURAS = ["Matemática", "Lenguaje y Comunicación", "Ciencias Naturales", "Historia y Geografía", "Orientación"];
+const TIPOS = ["Guía", "PPT", "Rúbrica", "Video", "Imágenes"];
+const OAS = ["Números y operaciones", "Comprensión lectora", "Indagación científica", "Pensamiento temporal", "Convivencia y emociones"];
+const OA_MAP = { 1: "Números y operaciones", 4: "Comprensión lectora", 5: "Indagación científica", 6: "Pensamiento temporal", 2: "Convivencia y emociones", 3: "Convivencia y emociones" };
+
+class Component extends DCLogic {
+  state = { view: "home", q: "", actId: 1, sort: "recientes", tab: "subidas", saved: [2], f: { nivel: [], asignatura: [], oa: [], tipo: [] } };
+
+  go = (view) => () => { this.setState({ view }); window.scrollTo(0, 0); };
+
+  toggleF = (group, val) => () => this.setState(s => {
+    const cur = s.f[group];
+    const next = cur.includes(val) ? cur.filter(v => v !== val) : cur.concat([val]);
+    return { f: Object.assign({}, s.f, { [group]: next }) };
+  });
+
+  filtered() {
+    const { f, q } = this.state;
+    const term = q.trim().toLowerCase();
+    let out = ACTS.filter(a => {
+      if (f.nivel.length && !f.nivel.includes(a.nivel)) return false;
+      if (f.asignatura.length && !f.asignatura.includes(a.asignatura)) return false;
+      if (f.oa.length && !f.oa.includes(OA_MAP[a.id])) return false;
+      if (f.tipo.length && !a.tipos.some(t => f.tipo.includes(t))) return false;
+      if (term && !(a.title + " " + a.oa + " " + a.asignatura + " " + a.nivel).toLowerCase().includes(term)) return false;
+      return true;
+    });
+    if (this.state.sort === "populares") out = out.slice().reverse();
+    return out;
+  }
+
+  row = (a) => ({
+    meta: a.asignatura + " · " + a.nivel + " · " + a.min + " min",
+    title: a.title,
+    oa: a.oa,
+    docsLine: a.docs.length + (a.docs.length === 1 ? " documento" : " documentos") + " · " + a.tipos.join(", "),
+    open: () => { this.setState({ view: "detail", actId: a.id }); window.scrollTo(0, 0); }
+  });
+
+  renderVals() {
+    const s = this.state;
+    const act = ACTS.find(a => a.id === s.actId) || ACTS[0];
+    const results = this.filtered();
+    const isSaved = s.saved.includes(act.id);
+    const navItems = [
+      { key: "home", label: "Inicio" },
+      { key: "search", label: "Actividades" },
+      { key: "profile", label: "Mis actividades" }
+    ];
+    const profileList = s.tab === "subidas"
+      ? ACTS.filter(a => a.autor === "Andrea Muñoz" || a.id === 5)
+      : ACTS.filter(a => s.saved.includes(a.id));
+
+    return {
+      isHome: s.view === "home", isSearch: s.view === "search", isDetail: s.view === "detail",
+      isUpload: s.view === "upload", isProfile: s.view === "profile",
+      goHome: this.go("home"), goSearch: this.go("search"), goUpload: this.go("upload"), goProfile: this.go("profile"),
+      q: s.q,
+      setQ: (e) => this.setState({ q: e.target.value }),
+      onEnter: (e) => { if (e.key === "Enter") { this.setState({ view: "search" }); window.scrollTo(0, 0); } },
+      nav: navItems.map(n => ({
+        label: n.label,
+        go: this.go(n.key),
+        color: s.view === n.key ? "#2B2A55" : "#6E6C8F",
+        weight: s.view === n.key ? 600 : 400,
+        line: s.view === n.key ? "#5FC79A" : "transparent"
+      })),
+      quickAsig: ASIGNATURAS.slice(0, 6).map(a => ({
+        label: a,
+        go: () => { this.setState(st => ({ view: "search", f: Object.assign({}, st.f, { asignatura: [a] }) })); window.scrollTo(0, 0); }
+      })),
+      totalCount: ACTS.length,
+      recent: ACTS.slice(0, 4).map(this.row),
+      results: results.map(this.row),
+      noResults: results.length === 0,
+      resultLabel: results.length + (results.length === 1 ? " actividad" : " actividades"),
+      sortOpts: [
+        { label: "Más recientes", key: "recientes" },
+        { label: "Más usadas", key: "populares" }
+      ].map(o => ({
+        label: o.label,
+        go: () => this.setState({ sort: o.key }),
+        color: s.sort === o.key ? "#2B2A55" : "#6E6C8F",
+        weight: s.sort === o.key ? 600 : 400
+      })),
+      clearFilters: () => this.setState({ f: { nivel: [], asignatura: [], oa: [], tipo: [] } }),
+      filterGroups: [
+        { name: "Nivel", key: "nivel", list: NIVELES },
+        { name: "Asignatura", key: "asignatura", list: ASIGNATURAS },
+        { name: "Objetivo de aprendizaje", key: "oa", list: OAS },
+        { name: "Tipo de recurso", key: "tipo", list: TIPOS }
+      ].map(g => ({
+        name: g.name,
+        opts: g.list.map(v => ({ label: v, on: s.f[g.key].includes(v), toggle: this.toggleF(g.key, v) }))
+      })),
+      act: {
+        title: act.title, autor: act.autor, oa: act.oa, desc: act.desc, evaluacion: act.evaluacion,
+        meta: act.asignatura + " · " + act.nivel + " · " + act.min + " min",
+        docs: act.docs, docsSize: act.docsSize, materiales: act.materiales, pasos: act.pasos,
+        ficha: [
+          { k: "Nivel", v: act.nivel },
+          { k: "Asignatura", v: act.asignatura },
+          { k: "Duración", v: act.min + " minutos" },
+          { k: "Tipo", v: act.tipos.join(", ") },
+          { k: "Publicada", v: "marzo 2026" }
+        ]
+      },
+      saveLabel: isSaved ? "Guardada ✓" : "Guardar",
+      saveBg: isSaved ? "#F2837B" : "transparent",
+      saveColor: isSaved ? "#3A1512" : "#3D3B96",
+      saveBorder: isSaved ? "#F2837B" : "#3D3B96",
+      toggleSave: () => this.setState(st => ({ saved: st.saved.includes(act.id) ? st.saved.filter(i => i !== act.id) : st.saved.concat([act.id]) })),
+      profileLine: "3 actividades subidas · " + s.saved.length + " guardadas · 42 descargas",
+      profileTabs: [
+        { label: "Subidas", key: "subidas" },
+        { label: "Guardadas", key: "guardadas" }
+      ].map(t => ({
+        label: t.label,
+        go: () => this.setState({ tab: t.key }),
+        color: s.tab === t.key ? "#2B2A55" : "#6E6C8F",
+        weight: s.tab === t.key ? 600 : 400,
+        line: s.tab === t.key ? "#5FC79A" : "transparent"
+      })),
+      profileList: profileList.map(this.row),
+      profileEmpty: profileList.length === 0
+    };
+  }
+}
+</script>
+</body>
+</html>
