@@ -84,7 +84,7 @@ guardada con el hash de esta aplicación. Detalle en `db/README.md`.
 
 ## Tests
 
-`npm test` corre 122 pruebas unitarias sin necesidad de base de datos. Entre
+`npm test` corre 128 pruebas unitarias sin necesidad de base de datos. Entre
 otras cosas fijan el mapeo de la migración contra los CSV reales, la
 verificación de los hashes `$2y$`, el token de sesión, el armado de filtros y el
 formulario de subida.
