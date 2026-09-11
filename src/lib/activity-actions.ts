@@ -5,24 +5,22 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth/session";
-import { hasStorageConfig } from "@/lib/env";
 import { notifyActivityCommented } from "@/lib/notifications";
-import { previewKindForFile } from "@/lib/preview";
-import { putFile, uploadKey } from "@/lib/storage";
+import { storedUrlFor } from "@/lib/storage";
 import { T, db, unwrap } from "@/lib/supabase";
+import { MOMENTS } from "@/lib/types";
+import { verifyUploadTicket } from "@/lib/upload-ticket";
+import { MAX_FILES } from "@/lib/uploads";
 
 /**
  * Writing activities: saving one, recording a download, commenting, and
  * publishing a new one.
  *
  * Every action re-reads the session server-side — a form field claiming a user
- * id would be trusted by nothing here.
+ * id would be trusted by nothing here. Lo mismo vale para los archivos: el
+ * navegador los sube directo al bucket y manda solo la clave, que solo se
+ * acepta si viene con el ticket firmado que se la entregó (`upload-ticket`).
  */
-
-const MAX_FILE_BYTES = 25 * 1024 * 1024;
-const MAX_FILES = 12;
-/** The cover is decoration, not a resource; 8 MB is already generous for one. */
-const MAX_COVER_BYTES = 8 * 1024 * 1024;
 
 export type ActionResult = { ok: boolean; error: string | null };
 
@@ -187,6 +185,51 @@ const createSchema = z.object({
   resourceTypeId: z.coerce.number().int().positive().optional(),
 });
 
+/** Un archivo que el navegador ya dejó en el bucket, con su comprobante. */
+const uploadedSchema = z.object({
+  key: z.string().min(1).max(500),
+  ticket: z.string().min(1),
+  name: z.string().max(300).default(""),
+});
+
+const uploadsSchema = z.object({
+  cover: uploadedSchema.nullable().default(null),
+  files: z.array(uploadedSchema).max(MAX_FILES).default([]),
+});
+
+type Uploads = z.infer<typeof uploadsSchema>;
+
+/**
+ * Lee las referencias de los archivos que el navegador ya subió y comprueba
+ * que cada una venga con el ticket que se la entregó a este profesor. Una
+ * clave sin ticket válido se descarta entera: es la única defensa contra un
+ * formulario manipulado que apunte a objetos ajenos del bucket.
+ */
+async function readUploads(value: FormDataEntryValue | null, userId: number): Promise<Uploads> {
+  if (typeof value !== "string" || !value) return { cover: null, files: [] };
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(value);
+  } catch {
+    throw new Error("No pudimos leer los archivos subidos. Vuelve a intentarlo.");
+  }
+
+  const parsed = uploadsSchema.safeParse(raw);
+  if (!parsed.success) throw new Error("No pudimos leer los archivos subidos. Vuelve a intentarlo.");
+
+  const { cover, files } = parsed.data;
+  if (cover && !(await verifyUploadTicket(cover.ticket, cover.key, userId, "cover"))) {
+    throw new Error("La portada no se subió correctamente. Vuelve a elegirla.");
+  }
+  for (const file of files) {
+    if (!(await verifyUploadTicket(file.ticket, file.key, userId, "document"))) {
+      throw new Error(`"${file.name}" no se subió correctamente. Vuelve a elegirlo.`);
+    }
+  }
+  return parsed.data;
+}
+
 /**
  * Finds the `tshare_subject_grades` row for a subject/grade pair, creating it
  * when the pair is new — the legacy catalogue does not cover every combination
@@ -223,6 +266,20 @@ function lines(value: FormDataEntryValue | null): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Inserta y revienta si Postgres se queja.
+ *
+ * Cada una de estas filas — la asignatura, las habilidades, los momentos, los
+ * materiales — es parte de la actividad, no un adorno. Ignorar su error
+ * publicaba una actividad a medias sin decírselo a nadie: la que se quedaba
+ * sin su fila de asignatura/nivel ni siquiera aparecía al filtrar.
+ */
+async function insertAll(table: string, rows: Record<string, unknown>[], what: string) {
+  if (rows.length === 0) return;
+  const { error } = await db().from(table).insert(rows);
+  if (error) throw new Error(`${what}: ${error.message}`);
+}
+
 export async function createActivity(
   _prev: ActionResult,
   formData: FormData,
@@ -241,26 +298,14 @@ export async function createActivity(
   });
   if (!parsed.success) return failed(parsed.error.issues[0]?.message ?? "Revisa el formulario.");
 
-  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
-  if (files.length > MAX_FILES) return failed(`Máximo ${MAX_FILES} archivos por actividad.`);
-  const tooBig = files.find((f) => f.size > MAX_FILE_BYTES);
-  if (tooBig) return failed(`"${tooBig.name}" supera los 25 MB.`);
-
-  // The portada — `avatar` on the old `actividades` table.
-  const picked = formData.get("cover");
-  const cover = picked instanceof File && picked.size > 0 ? picked : null;
-  if (cover) {
-    if (previewKindForFile(cover) !== "image") {
-      return failed("La portada tiene que ser una imagen (JPG, PNG, GIF o WEBP).");
-    }
-    if (cover.size > MAX_COVER_BYTES) return failed("La portada supera los 8 MB.");
+  let uploads: Uploads;
+  try {
+    uploads = await readUploads(formData.get("uploads"), session.userId);
+  } catch (err) {
+    return failed(err instanceof Error ? err.message : "Revisa los archivos.");
   }
 
-  if ((files.length > 0 || cover) && !hasStorageConfig()) {
-    return failed("La subida de archivos no está configurada en este entorno.");
-  }
-
-  let activityId: number;
+  let activityId: number | null = null;
   try {
     const pairId = await subjectGradeId(parsed.data.subjectId, parsed.data.gradeId);
 
@@ -273,6 +318,9 @@ export async function createActivity(
           description: parsed.data.description ?? null,
           evaluation: parsed.data.evaluation ?? null,
           duration_minutes: parsed.data.durationMinutes ?? null,
+          // La portada ya está en el bucket; aquí solo se guarda su referencia.
+          cover_image_key: uploads.cover?.key ?? null,
+          cover_image_url: uploads.cover ? storedUrlFor(uploads.cover.key) : null,
           user_id: session.userId,
         })
         .select("id")
@@ -281,64 +329,64 @@ export async function createActivity(
     ) as { id: number };
     activityId = activity.id;
 
-    await db()
-      .from(T.activitySubjectGrades)
-      .insert({ activity_id: activityId, subject_grade_id: pairId });
+    await insertAll(
+      T.activitySubjectGrades,
+      [{ activity_id: activityId, subject_grade_id: pairId }],
+      "asignatura y nivel",
+    );
 
     const skillIds = formData
       .getAll("skillIds")
       .map((v) => Number(v))
       .filter((n) => Number.isInteger(n) && n > 0);
-    if (skillIds.length) {
-      await db()
-        .from(T.activitySkills)
-        .insert(skillIds.map((skill_id) => ({ activity_id: activityId, skill_id })));
-    }
+    await insertAll(
+      T.activitySkills,
+      skillIds.map((skill_id) => ({ activity_id: activityId, skill_id })),
+      "habilidades",
+    );
 
     // "Momentos de la clase" — one instruction row per filled-in moment.
-    const steps = (["Inicio", "Desarrollo", "Cierre"] as const)
-      .map((name) => ({ name, body: String(formData.get(`step_${name}`) ?? "").trim() }))
-      .filter((s) => s.body);
-    if (steps.length) {
-      await db()
-        .from(T.activityInstructions)
-        .insert(steps.map((s) => ({ activity_id: activityId, name: s.name, body: s.body })));
-    }
+    const steps = MOMENTS.map((name) => ({
+      name,
+      body: String(formData.get(`step_${name}`) ?? "").trim(),
+    })).filter((s) => s.body);
+    await insertAll(
+      T.activityInstructions,
+      steps.map((s) => ({ activity_id: activityId, name: s.name, body: s.body })),
+      "momentos de la clase",
+    );
 
-    const materials = lines(formData.get("materials"));
-    if (materials.length) {
-      await db()
-        .from(T.activityMaterials)
-        .insert(materials.map((name) => ({ activity_id: activityId, name })));
-    }
+    await insertAll(
+      T.activityMaterials,
+      lines(formData.get("materials")).map((name) => ({ activity_id: activityId, name })),
+      "materiales",
+    );
 
-    if (cover) {
-      const stored = await putFile(
-        uploadKey("actividades/portadas", cover.name),
-        new Uint8Array(await cover.arrayBuffer()),
-        cover.type || "image/jpeg",
-      );
-      await db()
-        .from(T.activities)
-        .update({ cover_image_key: stored.key, cover_image_url: stored.url })
-        .eq("id", activityId);
-    }
-
-    for (const file of files) {
-      const stored = await putFile(
-        uploadKey("actividades/recursos", file.name),
-        new Uint8Array(await file.arrayBuffer()),
-        file.type || "application/octet-stream",
-      );
-      await db().from(T.activityResources).insert({
+    await insertAll(
+      T.activityResources,
+      uploads.files.map((file) => ({
         activity_id: activityId,
         resource_type_id: parsed.data.resourceTypeId ?? null,
         name: file.name,
-        file_key: stored.key,
-        file_url: stored.url,
-      });
-    }
+        file_key: file.key,
+        file_url: storedUrlFor(file.key),
+      })),
+      "documentos",
+    );
   } catch (err) {
+    // Sin transacciones sobre PostgREST, deshacer es borrar la actividad: el
+    // esquema cascadea, así que se lleva las filas hijas que alcanzaron a
+    // entrar. Los objetos de S3 quedan — las credenciales del bucket no tienen
+    // permiso de borrado — pero son huérfanos que nadie referencia.
+    if (activityId !== null) {
+      await db()
+        .from(T.activities)
+        .delete()
+        .eq("id", activityId)
+        .then(({ error }) => {
+          if (error) console.error("[crear] no se pudo deshacer la actividad:", error.message);
+        });
+    }
     return failed(err instanceof Error ? err.message : "No pudimos publicar la actividad.");
   }
 

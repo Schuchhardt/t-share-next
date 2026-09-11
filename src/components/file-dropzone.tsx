@@ -2,15 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import { fileLabel, previewKindForFile } from "@/lib/preview";
+import { MAX_FILES, MAX_FILE_BYTES, maxMbFor } from "@/lib/uploads";
 
 /**
  * The document picker on the upload form.
  *
- * The `<input type="file" name="files">` stays the source of truth so the
- * surrounding form posts the files as part of its own multipart body — React
+ * The `<input type="file" name="files">` stays the source of truth — React
  * state only mirrors it for the list below. Dropping files and removing one
  * write back into the input through a `DataTransfer`, which is the only way to
- * assign a `FileList`.
+ * assign a `FileList`. De ahí los saca `CreateActivityForm`, que los sube al
+ * bucket antes de publicar; el `<form>` nunca los manda en su propio cuerpo.
  *
  * Each picked file carries its preview alongside it: an object URL when it is
  * an image, null otherwise. Minting it here rather than inside the row keeps
@@ -18,7 +19,6 @@ import { fileLabel, previewKindForFile } from "@/lib/preview";
  * revoke it on the spot instead of leaving the blob alive until reload.
  */
 
-const MAX_BYTES = 25 * 1024 * 1024;
 const ACCEPT = ".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.mp4";
 
 /** A picked file and the object URL used to preview it, when it has one. */
@@ -40,6 +40,7 @@ export function FileDropzone() {
   const [picked, setPicked] = useState<Picked[]>([]);
   const [dragging, setDragging] = useState(false);
   const [rejected, setRejected] = useState<string[]>([]);
+  const [overflow, setOverflow] = useState(0);
 
   // Written by `sync` below, never during render, so that leaving the page
   // releases whatever blobs the list still holds.
@@ -64,11 +65,9 @@ export function FileDropzone() {
     const accepted: File[] = [];
     const tooBig: string[] = [];
     for (const file of Array.from(incoming)) {
-      if (file.size > MAX_BYTES) tooBig.push(file.name);
+      if (file.size > MAX_FILE_BYTES) tooBig.push(file.name);
       else accepted.push(file);
     }
-    setRejected(tooBig);
-
     const fresh = accepted
       .filter((f) => !picked.some((p) => sameFile(p.file, f)))
       .map((file) => ({
@@ -76,7 +75,17 @@ export function FileDropzone() {
         url: previewKindForFile(file) === "image" ? URL.createObjectURL(file) : null,
       }));
 
-    sync([...picked, ...fresh]);
+    // Sobra decírselo aquí en vez de después de esperar la subida de doce
+    // archivos para que el servidor lo rechace.
+    const room = MAX_FILES - picked.length;
+    const kept = fresh.slice(0, Math.max(room, 0));
+    for (const extra of fresh.slice(kept.length)) {
+      if (extra.url) URL.revokeObjectURL(extra.url);
+    }
+    setRejected(tooBig);
+    setOverflow(fresh.length - kept.length);
+
+    sync([...picked, ...kept]);
   }
 
   function remove(index: number) {
@@ -107,7 +116,9 @@ export function FileDropzone() {
         <span className="text-base font-semibold text-ink">
           Arrastra guías, PPT o rúbricas aquí
         </span>
-        <span className="text-sm text-muted">PDF, DOCX, PPTX, JPG · hasta 25 MB por archivo</span>
+        <span className="text-sm text-muted">
+          PDF, DOCX, PPTX, JPG · hasta {maxMbFor("document")} MB por archivo, {MAX_FILES} en total
+        </span>
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
@@ -129,7 +140,15 @@ export function FileDropzone() {
 
       {rejected.length > 0 && (
         <p role="alert" className="text-sm text-coral-ink">
-          {rejected.join(", ")} {rejected.length === 1 ? "supera" : "superan"} los 25 MB.
+          {rejected.join(", ")} {rejected.length === 1 ? "supera" : "superan"} los{" "}
+          {maxMbFor("document")} MB.
+        </p>
+      )}
+
+      {overflow > 0 && (
+        <p role="alert" className="text-sm text-coral-ink">
+          Solo caben {MAX_FILES} archivos por actividad; {overflow === 1 ? "quedó" : "quedaron"}{" "}
+          {overflow} fuera.
         </p>
       )}
 

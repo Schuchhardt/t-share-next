@@ -40,6 +40,13 @@ export type ActivityDocument = {
   format: string | null;
 };
 
+/**
+ * Los tres momentos de una clase, en orden. El formulario los ofrece y el
+ * server action los guarda como una instrucción cada uno, así que viven aquí
+ * para que no puedan desalinearse.
+ */
+export const MOMENTS = ["Inicio", "Desarrollo", "Cierre"] as const;
+
 export type ActivityStep = {
   id: number;
   name: string;

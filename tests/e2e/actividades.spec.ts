@@ -3,7 +3,17 @@ import { E2E, expect, requiresDatabase, signIn, test } from "./fixtures";
 /**
  * What a signed-in teacher can do: save an activity, comment on it, and
  * publish a new one. Each of these writes to Supabase through a server action.
+ *
+ * Los adjuntos tienen su propio caso porque tienen su propio camino: no van
+ * dentro del server action, que acepta 1 MB, sino de a uno por `/api/subidas`.
+ * Publicar con una guía de verdad moría con "Body exceeded 1 MB limit", así
+ * que el test que lo cubre carga archivos que pesan de verdad.
  */
+
+/** Un archivo del tamaño pedido, sin dejar binarios en el repo. */
+function archivo(name: string, mimeType: string, bytes: number) {
+  return { name, mimeType, buffer: Buffer.alloc(bytes, "T") };
+}
 
 requiresDatabase();
 
@@ -81,6 +91,39 @@ test("publishing an activity lands on its detail page", async ({ page }) => {
   // And it is on the profile.
   await page.goto("/mi-perfil");
   await expect(page.getByRole("link", { name: title })).toBeVisible();
+});
+
+test("publishing with a cover and a document stores both", async ({ page }) => {
+  const title = `Actividad con adjuntos ${Date.now()}`;
+
+  await page.goto("/actividades/crear");
+  await page.getByLabel("Título de la actividad").fill(title);
+  await page.getByLabel("Asignatura").selectOption({ label: E2E.subject.name });
+  await page.getByLabel("Nivel").selectOption({ label: `${E2E.grade.name} · ${E2E.grade.description}` });
+
+  // Pesados a propósito: con el límite de 1 MB del server action, esto era
+  // exactamente lo que devolvía un 500 y dejaba al profesor sin formulario.
+  await page.getByLabel("Portada").setInputFiles(archivo("portada.png", "image/png", 2 * 1024 * 1024));
+  await page
+    .getByLabel("Documentos de la actividad")
+    .setInputFiles([archivo("guia.pdf", "application/pdf", 3 * 1024 * 1024)]);
+
+  await page.getByRole("button", { name: "Publicar actividad" }).click();
+
+  await expect(page).toHaveURL(/\/actividades\/detalle\/\d+$/, { timeout: 60_000 });
+  await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  await expect(page.getByText("guia.pdf")).toBeVisible();
+});
+
+test("a document over the limit is refused before publishing", async ({ page }) => {
+  await page.goto("/actividades/crear");
+  await page
+    .getByLabel("Documentos de la actividad")
+    .setInputFiles([archivo("enorme.pdf", "application/pdf", 5 * 1024 * 1024)]);
+
+  await expect(page.getByText(/supera los 4 MB/)).toBeVisible();
+  // Y lo dice sin tumbar el formulario: el título sigue ahí para seguir.
+  await expect(page.getByLabel("Título de la actividad")).toBeVisible();
 });
 
 test("publishing without a title is refused", async ({ page }) => {

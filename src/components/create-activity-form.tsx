@@ -1,25 +1,33 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { FileDropzone } from "@/components/file-dropzone";
 import { ImagePicker } from "@/components/image-picker";
-import { createActivity } from "@/lib/activity-actions";
-import type { CatalogItem, Grade } from "@/lib/types";
+import { createActivity, type ActionResult } from "@/lib/activity-actions";
+import { MOMENTS, type CatalogItem, type Grade } from "@/lib/types";
+import { uploadPicked, type PickedUpload } from "@/lib/upload-client";
+import { maxMbFor } from "@/lib/uploads";
 
 /**
  * Publishing an activity.
  *
- * The whole form posts to one server action, files included: the dropzone
- * keeps its `<input type="file">` inside the form, so the browser submits the
- * files as part of the same multipart body and `createActivity` streams them
- * to S3. That keeps the upload and the row in one request — a separate upload
- * endpoint would leave orphan objects behind whenever the row failed to save.
+ * Publicar son dos pasos, y el orden importa. Los archivos no caben dentro del
+ * server action, que acepta 1 MB de cuerpo: primero se suben de a uno a
+ * `POST /api/subidas`, que los deja en el bucket, y recién después se manda el
+ * formulario con las claves que devolvió.
+ *
+ * Los dos pasos viven dentro de la misma acción del `<form>`, de modo que
+ * `useFormStatus` cubre la subida igual que el guardado: el botón queda
+ * deshabilitado desde el primer byte hasta el redirect, y un archivo que no
+ * sube deja la actividad sin publicar en vez de publicarla a medias.
+ *
+ * El precio es que el formulario ya no funciona sin JavaScript. Elegir un
+ * archivo tampoco funcionaba sin él, así que lo que se pierde es publicar solo
+ * texto con JS apagado.
  */
 
-const MOMENTS = ["Inicio", "Desarrollo", "Cierre"] as const;
-
-function Publish() {
+function Publish({ phase }: { phase: string | null }) {
   const { pending } = useFormStatus();
   return (
     <button
@@ -27,7 +35,7 @@ function Publish() {
       disabled={pending}
       className="rounded-sm border-none bg-green px-6 py-[13px] text-[15px] font-bold text-green-ink transition-colors hover:bg-green-hover disabled:cursor-not-allowed disabled:opacity-60"
     >
-      {pending ? "Publicando…" : "Publicar actividad"}
+      {pending ? (phase ?? "Publicando…") : "Publicar actividad"}
     </button>
   );
 }
@@ -45,7 +53,54 @@ export function CreateActivityForm({
   resourceTypes: CatalogItem[];
   suggestedMaterials: string[];
 }) {
-  const [state, formAction] = useActionState(createActivity, { ok: true, error: null });
+  const [phase, setPhase] = useState<string | null>(null);
+
+  /**
+   * Sube lo que el profesor eligió y, si todo llegó al bucket, publica.
+   * Los `File` salen del FormData antes de mandarlo: ya están en S3, y
+   * mandarlos otra vez es justamente lo que reventaba el límite de 1 MB.
+   */
+  async function publish(prev: ActionResult, formData: FormData): Promise<ActionResult> {
+    const isFile = (v: FormDataEntryValue): v is File => v instanceof File && v.size > 0;
+    const cover = formData.getAll("cover").filter(isFile);
+    const documents = formData.getAll("files").filter(isFile);
+    formData.delete("cover");
+    formData.delete("files");
+
+    const picked: PickedUpload[] = [
+      ...cover.map((file) => ({ kind: "cover" as const, file })),
+      ...documents.map((file) => ({ kind: "document" as const, file })),
+    ];
+
+    try {
+      if (picked.length > 0) {
+        setPhase(`Subiendo 1 de ${picked.length}…`);
+        const uploaded = await uploadPicked(picked, (done, total) => {
+          setPhase(done < total ? `Subiendo ${done + 1} de ${total}…` : "Publicando…");
+        });
+        if (!uploaded.ok) return { ok: false, error: uploaded.error };
+        formData.set(
+          "uploads",
+          JSON.stringify({ cover: uploaded.cover, files: uploaded.files }),
+        );
+      }
+      setPhase("Publicando…");
+      return await createActivity(prev, formData);
+    } catch (err) {
+      // `createActivity` termina en un `redirect()`, que React propaga como
+      // una excepción propia: esa tiene que seguir su camino.
+      if (err instanceof Error && err.message.includes("NEXT_REDIRECT")) throw err;
+      if (typeof err === "object" && err !== null && "digest" in err) throw err;
+      return { ok: false, error: "No pudimos publicar la actividad. Vuelve a intentarlo." };
+    } finally {
+      setPhase(null);
+    }
+  }
+
+  const [state, formAction] = useActionState<ActionResult, FormData>(publish, {
+    ok: true,
+    error: null,
+  });
 
   return (
     <form action={formAction} className="grid max-w-[760px] gap-[34px]">
@@ -219,7 +274,7 @@ export function CreateActivityForm({
         name="cover"
         label="Portada"
         alt="Vista previa de la portada"
-        hint="Opcional · JPG o PNG, hasta 8 MB"
+        hint={`Opcional · JPG o PNG, hasta ${maxMbFor("cover")} MB`}
       />
 
       <FileDropzone />
@@ -229,7 +284,7 @@ export function CreateActivityForm({
           {state.error}
         </p>
         <div className="flex flex-wrap items-center gap-3.5">
-          <Publish />
+          <Publish phase={phase} />
           <span className="text-sm text-muted">
             Se publica con tu nombre y queda visible para todos los profesores.
           </span>

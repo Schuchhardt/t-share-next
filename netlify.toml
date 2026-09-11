@@ -14,11 +14,6 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Uploads post the file straight to the server action, so the function needs
-# more than the default body limit and a little longer to stream to S3.
-[functions]
-  included_files = []
-
 [[headers]]
   for = "/*"
   [headers.values]

@@ -9,6 +9,7 @@ import { FileDropzone, formatSize, sameFile } from "@/components/file-dropzone";
 import { ImagePicker } from "@/components/image-picker";
 import type { ActivityDocument, ActivitySummary } from "@/lib/types";
 import { initials } from "@/lib/types";
+import { MAX_FILES, MAX_FILE_BYTES, maxMbFor } from "@/lib/uploads";
 
 const activity: ActivitySummary = {
   id: 42,
@@ -50,6 +51,13 @@ describe("ActivityRow", () => {
     expect(screen.getByRole("link", { name: /El post-it positivo/ })).toBeInTheDocument();
   });
 });
+
+/** Un File que dice pesar lo que se le pida; jsdom no construye 4 MB. */
+function sized(name: string, bytes: number): File {
+  const file = new File(["x"], name, { type: "application/pdf" });
+  Object.defineProperty(file, "size", { value: bytes });
+  return file;
+}
 
 describe("FileDropzone", () => {
   it("formats sizes the way the design shows them", () => {
@@ -101,16 +109,32 @@ describe("FileDropzone", () => {
     expect(screen.getByText("rubrica.pdf")).toBeInTheDocument();
   });
 
-  it("rejects a file over 25 MB and says which one", () => {
+  it("rejects a file over the limit and says which one", () => {
     render(<FileDropzone />);
     const input = screen.getByLabelText("Documentos de la actividad") as HTMLInputElement;
 
-    const huge = new File(["x"], "enorme.pdf", { type: "application/pdf" });
-    Object.defineProperty(huge, "size", { value: 26 * 1024 * 1024 });
-    pick(input, huge);
+    pick(input, sized("enorme.pdf", MAX_FILE_BYTES + 1));
 
-    expect(screen.getByRole("alert")).toHaveTextContent("enorme.pdf supera los 25 MB.");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      `enorme.pdf supera los ${maxMbFor("document")} MB.`,
+    );
     expect(input.files).toHaveLength(0);
+  });
+
+  /**
+   * El servidor también lo cuenta, pero decírselo aquí ahorra esperar la subida
+   * de doce archivos para que lo rechace al final.
+   */
+  it("keeps only the first MAX_FILES and says how many quedaron fuera", () => {
+    render(<FileDropzone />);
+    const input = screen.getByLabelText("Documentos de la actividad") as HTMLInputElement;
+
+    for (let i = 0; i < MAX_FILES + 2; i++) {
+      pick(input, new File([`${i}`], `guia-${i}.pdf`, { type: "application/pdf" }));
+    }
+
+    expect(input.files).toHaveLength(MAX_FILES);
+    expect(screen.getByRole("alert")).toHaveTextContent(`Solo caben ${MAX_FILES} archivos`);
   });
 
   it("removes a file from the input as well as from the list", async () => {

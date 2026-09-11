@@ -112,9 +112,51 @@ sigue resolviendo. Sobre eso:
 3. **S3.** El bucket actual se sigue usando tal cual: no se migra nada. Las
    subidas nuevas van al mismo bucket y guardan la URL en la base; los archivos
    antiguos se sirven con una URL firmada a partir de su *key*. El bucket es
-   privado, así que `S3_PUBLIC_BASE_URL` tiene que quedar vacía.
+   privado, así que `S3_PUBLIC_BASE_URL` tiene que quedar vacía. Cuánto puede
+   pesar un archivo y por qué: ver [Subida de archivos](#subida-de-archivos).
 4. **Correo.** `SENDGRID_API_KEY` y, en local, `APP_URL=http://localhost:9796`.
    Ver [Correo](#correo).
+
+## Subida de archivos
+
+Los archivos **no** viajan dentro del server action. Uno acepta 1 MB de cuerpo,
+así que publicar con una guía adjunta moría con `Body exceeded 1 MB limit` y el
+profesor perdía el formulario entero sin ver un mensaje. En vez de eso el
+navegador los manda de a uno a `POST /api/subidas` —una ruta normal, sin ese
+tope—, que los deja en el bucket y devuelve la *key*; el formulario manda
+después solo esas referencias.
+
+Como la *key* la manda el navegador, no se le cree sola: la ruta devuelve
+también un *ticket* —un JWT firmado con `SESSION_SECRET` que ata esa *key* a ese
+profesor— y `createActivity` solo acepta claves que vengan con el suyo
+(`src/lib/upload-ticket.ts`). Sin eso, un formulario manipulado podría colgar de
+su actividad cualquier objeto del bucket.
+
+### Por qué 4 MB
+
+Es el techo de la plataforma, no una decisión de diseño: la función de Netlify
+que corre la ruta acepta 6 MB de payload, y como el binario viaja en base64 eso
+deja unos 4,5 MB reales. Los máximos viven en `src/lib/uploads.ts` —4 MB por
+documento, 3 MB la portada— y los usan el navegador y el servidor, para que el
+aviso y la regla no puedan separarse.
+
+Para subir más que eso hay que sacar los archivos del servidor: el navegador
+tendría que escribir directo en S3 con una URL firmada, y para eso **el bucket
+necesita una regla CORS que hoy no tiene** (responde `CORS is not enabled for
+this bucket`). El día que se pueda configurar, en *S3 → el bucket → Permissions
+→ Cross-origin resource sharing*:
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://t-share.org", "http://localhost:9796"],
+    "AllowedMethods": ["PUT"],
+    "AllowedHeaders": ["content-type"],
+    "ExposeHeaders": [],
+    "MaxAgeSeconds": 3000
+  }
+]
+```
 
 ## Contraseñas migradas
 

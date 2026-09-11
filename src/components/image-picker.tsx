@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatSize } from "@/components/file-dropzone";
 import { previewKindForFile } from "@/lib/preview";
+import { MAX_COVER_BYTES, maxMbFor } from "@/lib/uploads";
 
 /**
  * Picking one image, with the image itself as the preview.
@@ -20,8 +21,6 @@ import { previewKindForFile } from "@/lib/preview";
  * file is chosen, and "Quitar" falls back to it rather than to the empty
  * state — this component picks a replacement, it does not delete.
  */
-
-const MAX_BYTES = 8 * 1024 * 1024;
 
 type Picked = { file: File; url: string };
 
@@ -72,8 +71,8 @@ export function ImagePicker({
       clear();
       return;
     }
-    if (chosen.size > MAX_BYTES) {
-      setError(`"${chosen.name}" supera los 8 MB.`);
+    if (chosen.size > MAX_COVER_BYTES) {
+      setError(`"${chosen.name}" supera los ${maxMbFor("cover")} MB.`);
       clear();
       return;
     }

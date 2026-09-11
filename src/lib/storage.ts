@@ -17,6 +17,10 @@ import { env, hasStorageConfig } from "@/lib/env";
  *     costs no signing round-trip.
  *
  * `fileUrl()` resolves whichever is present.
+ *
+ * Las subidas nuevas entran por `POST /api/subidas`, que llama a `putFile()` y
+ * guarda solo la clave: el navegador no habla con S3 directamente porque el
+ * bucket no tiene CORS habilitado.
  */
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60 * 6;
@@ -63,6 +67,15 @@ export async function putFile(
     }),
   );
   return { key, url: env.s3PublicBaseUrl ? `${env.s3PublicBaseUrl}/${key}` : null };
+}
+
+/**
+ * La URL absoluta con la que se guarda un objeto recién subido, o null cuando
+ * el bucket es privado y hay que firmar cada lectura. Es lo mismo que devuelve
+ * `putFile`, para las subidas que ya no pasan por el servidor.
+ */
+export function storedUrlFor(key: string): string | null {
+  return env.s3PublicBaseUrl ? `${env.s3PublicBaseUrl}/${key}` : null;
 }
 
 /**
