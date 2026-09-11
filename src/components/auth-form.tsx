@@ -25,6 +25,11 @@ import { checkNewPassword } from "@/lib/auth/strength";
  * Server Components, which cannot hand a function to a client one.
  */
 
+/** One more error on this form, counted from the state the last run left. */
+function failures(previous: FormState): number {
+  return (previous.attempts ?? 0) + 1;
+}
+
 function Submit({ label, pendingLabel }: { label: string; pendingLabel: string }) {
   const { pending } = useFormStatus();
   return (
@@ -37,6 +42,18 @@ function Submit({ label, pendingLabel }: { label: string; pendingLabel: string }
     </button>
   );
 }
+
+/**
+ * A second line to show once the form has come back with an error `after`
+ * times in a row — the sign-in screen uses it to point at the access link it
+ * just mailed.
+ *
+ * The count is kept here, in the browser, rather than by the action. The
+ * server knows whether the address exists and the form must not: telling
+ * everyone the same thing after the same number of misses is what keeps this
+ * from becoming a way to check who has an account.
+ */
+export type RetryHint = { after: number; message: string };
 
 /** Which fields hold a password being chosen, so the form can vet them. */
 export type NewPasswordFields = {
@@ -55,6 +72,7 @@ export function AuthForm({
   children,
   footer,
   newPassword,
+  retryHint,
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
   title: string;
@@ -64,6 +82,7 @@ export function AuthForm({
   children: React.ReactNode;
   footer?: React.ReactNode;
   newPassword?: NewPasswordFields;
+  retryHint?: RetryHint;
 }) {
   const [state, formAction] = useActionState(
     async (previous: FormState, formData: FormData): Promise<FormState> => {
@@ -76,12 +95,17 @@ export function AuthForm({
           value(newPassword.confirmField),
           newPassword.emailField ? value(newPassword.emailField) : undefined,
         );
-        if (problem) return { error: problem };
+        if (problem) return { error: problem, attempts: failures(previous) };
       }
-      return action(previous, formData);
+      const result = await action(previous, formData);
+      return { ...result, attempts: result.error ? failures(previous) : 0 };
     },
-    { error: null },
+    { error: null, attempts: 0 },
   );
+
+  const notice =
+    state.notice ??
+    (retryHint && (state.attempts ?? 0) >= retryHint.after ? retryHint.message : null);
 
   return (
     <section className="mx-auto max-w-[440px] pt-16 pb-24">
@@ -97,12 +121,12 @@ export function AuthForm({
           {state.error}
         </p>
 
-        {state.notice && (
+        {notice && (
           <p
             aria-live="polite"
             className="rounded-sm bg-mint px-4 py-3 text-sm leading-[1.55] text-mint-strong"
           >
-            {state.notice}
+            {notice}
           </p>
         )}
 

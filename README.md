@@ -44,10 +44,11 @@ src/
     storage.ts        S3: subida y URLs firmadas
     preview.ts        qué archivos se pueden mostrar sin descargar
     seo.ts            canonical, snippets y datos estructurados
-    email.ts          envío por SendGrid
-    notifications.ts  los tres correos que manda la aplicación
+    email.ts          envío por Resend
+    notifications.ts  los correos que manda la aplicación
     auth/             contraseñas y su formato, token de sesión, acciones de
-                      cuenta, tokens de recuperación
+                      cuenta, tokens de recuperación y de acceso
+  emails/             las plantillas, en React Email
     activity-actions.ts  guardar, descargar, comentar, publicar
     filters.ts        lectura de la query string
     format.ts         strings de presentación
@@ -72,6 +73,7 @@ Las URLs se mantienen iguales a las del front Angular para no romper enlaces ni 
 | `/cambiar-password` | Cambio de contraseña (forzado tras la migración) | con cuenta |
 | `/recuperar-clave` | Pedir un enlace de recuperación por correo | público |
 | `/cambiar-clave` | Elegir contraseña nueva desde ese enlace | con el token |
+| `/acceso` | Enlace de acceso: entra y manda a elegir contraseña | con el token |
 | `/sitemap.xml`, `/robots.txt` | Generados desde la base (ver [SEO](#seo)) | público |
 
 ## SEO
@@ -114,7 +116,7 @@ sigue resolviendo. Sobre eso:
    antiguos se sirven con una URL firmada a partir de su *key*. El bucket es
    privado, así que `S3_PUBLIC_BASE_URL` tiene que quedar vacía. Cuánto puede
    pesar un archivo y por qué: ver [Subida de archivos](#subida-de-archivos).
-4. **Correo.** `SENDGRID_API_KEY` y, en local, `APP_URL=http://localhost:9796`.
+4. **Correo.** `RESEND_API_KEY` y, en local, `APP_URL=http://localhost:9796`.
    Ver [Correo](#correo).
 
 ## Subida de archivos
@@ -167,15 +169,21 @@ guardada con el hash de esta aplicación. Detalle en `db/README.md`.
 
 ## Correo
 
-Se manda por **SendGrid**, la misma cuenta que usaba la API Laravel. Son los
-tres correos que ya existían, con el mismo asunto para no romper los filtros
-que los profesores tengan armados:
+Se manda por **Resend**, desde `comunidad@email.t-share.org`. El remitente vive
+en un subdominio a propósito: su SPF y su DKIM quedan aparte del MX de
+t-share.org, así que autenticar lo que manda la aplicación no toca el buzón que
+lee el equipo. Quien responda un correo llega igual a `comunidad@t-share.org`,
+por el `Reply-To`.
+
+Los tres correos que ya existían conservan el asunto palabra por palabra, para
+no romper los filtros que los profesores tengan armados:
 
 | Cuándo | Asunto | Antes era |
 | --- | --- | --- |
 | Al crear una cuenta | ¡Bienvenido a T-share! | `WelcomeUser` |
 | Al pedir recuperar la contraseña | Recuperación de contraseña - T-share | `PasswordReset` |
 | Al comentar la actividad de otro | Han comentado tu actividad en T-share | `ActividadComentada` |
+| Tras dos contraseñas erradas | Tu enlace para entrar a T-share | (nuevo) |
 
 Los otros tres que mandaba correo en Laravel (`UsuarioMensaje`,
 `ActividadSolicitaAutorizacion` y `AutorizaEdicionActividad`) son de la
@@ -183,13 +191,25 @@ mensajería interna y de la autorización de edición, que esta aplicación toda
 no tiene. Cuando existan, los constructores van en `src/lib/notifications.ts`
 junto a los otros.
 
-Sin `SENDGRID_API_KEY` no falla nada: el envío se registra en consola y la
-acción sigue. En local conviene poner `APP_URL=http://localhost:9796`, o el
-enlace de recuperación apunta a producción.
+Sin `RESEND_API_KEY` no falla nada: el envío se registra en consola y la acción
+sigue. En local conviene poner `APP_URL=http://localhost:9796`, o los enlaces
+de los correos apuntan a producción.
 
-El envío nunca bloquea al usuario. El de bienvenida y el de comentario salen
-con `after()` —después de la respuesta— y ninguno de los tres convierte un
-fallo de SendGrid en un error de formulario.
+El envío nunca bloquea al usuario. El de bienvenida, el de comentario y el de
+acceso salen con `after()` —después de la respuesta— y ninguno convierte un
+fallo de Resend en un error de formulario.
+
+### Las plantillas
+
+Cada correo es un componente de **React Email** en `src/emails/`, sobre un
+`EmailLayout` común: logo, encabezado, cuerpo, botón y pie, con los mismos
+colores que `globals.css`. `src/lib/notifications.ts` lo renderiza dos veces, a
+HTML y a texto plano, así que las dos partes de un mensaje no pueden quedar
+desfasadas y React escapa solo lo que escribió un profesor —el título de una
+actividad ya no se concatena a mano dentro del markup.
+
+El logo va como PNG (`public/brand/tshare-logo-email.png`, generado desde el
+SVG de la marca): Gmail y Outlook no muestran SVG.
 
 ### Recuperación de contraseña
 
@@ -198,9 +218,29 @@ copia del valor real es la que va en el correo. Dura una hora, sirve una sola
 vez, y pedir otro invalida el anterior. Las rutas son las mismas del sitio
 Angular (`/recuperar-clave` y `/cambiar-clave?token=…`).
 
+### Enlace de acceso tras dos intentos fallidos
+
+Errar la contraseña dos veces seguidas no es un dedazo: es no acordarse. A la
+segunda, `signIn` manda un enlace que entra directo —`/acceso?token=…`— y deja
+al profesor en `/cambiar-password` para que elija una nueva. Esa pantalla no le
+pide la anterior: el enlace ya demostró que el correo es suyo, y la contraseña
+vieja es justamente lo que no tiene. La sesión lleva firmado el flag
+`viaAccessLink`, y es lo único que autoriza a saltarse esa verificación.
+
+Las filas viven en la misma tabla, con la columna `purpose` separando las dos
+clases de enlace: un token de recuperación pegado en `/acceso` es tan
+desconocido como uno inventado. Dura 30 minutos, se gasta antes de entregar la
+sesión —así que reenviarlo, o que lo abra un escáner de correo, no sirve de
+nada— y mientras haya uno vivo no se manda otro, de modo que insistir con la
+contraseña de un tercero no llena el buzón de nadie.
+
+El aviso de "revisa tu correo" lo cuenta el navegador, no el servidor, y dice
+"si existe una cuenta con ese correo": el formulario sigue sin delatar qué
+direcciones están registradas.
+
 ## Tests
 
-`npm test` corre 199 pruebas unitarias sin necesidad de base de datos. Entre
+`npm test` corre 222 pruebas unitarias sin necesidad de base de datos. Entre
 otras cosas fijan el mapeo de la migración contra los CSV reales, la
 verificación de los hashes `$2y$`, el token de sesión, el armado de filtros y el
 formulario de subida.
@@ -224,8 +264,8 @@ Server Components, las Server Actions y el proxy como funciones.
 En **Site configuration → Environment variables** hay que cargar las mismas
 variables de `.env.example`: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
 `SESSION_SECRET`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`,
-`S3_SECRET_ACCESS_KEY`, `SENDGRID_API_KEY`, `MAIL_FROM_ADDRESS`,
-`MAIL_FROM_NAME` y `APP_URL`.
+`S3_SECRET_ACCESS_KEY`, `RESEND_API_KEY`, `RESEND_EMAIL_ADDRESS`,
+`MAIL_FROM_NAME`, `MAIL_REPLY_TO` y `APP_URL`.
 
 **`S3_PUBLIC_BASE_URL` va vacía.** El bucket de producción es privado: si se
 llena, la aplicación entrega la URL sin firmar y todas las imágenes y descargas

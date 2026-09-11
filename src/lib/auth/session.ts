@@ -20,15 +20,29 @@ import {
 export { SESSION_COOKIE, verifySession };
 export type { Session };
 
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  sameSite: "lax",
+  secure: process.env.NODE_ENV === "production",
+  path: "/",
+  maxAge: SESSION_MAX_AGE_SECONDS,
+} as const;
+
+/**
+ * The signed cookie, ready to hand to a `NextResponse`.
+ *
+ * Route handlers that answer with a redirect set it on the response itself
+ * rather than through `cookies()`: the header and the Location then leave
+ * together, with nothing relying on Next merging a mutated cookie store into
+ * a response it did not build.
+ */
+export async function sessionCookie(session: Session) {
+  return { name: SESSION_COOKIE, value: await signSession(session), ...COOKIE_OPTIONS };
+}
+
 export async function setSessionCookie(session: Session): Promise<void> {
   const store = await cookies();
-  store.set(SESSION_COOKIE, await signSession(session), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: SESSION_MAX_AGE_SECONDS,
-  });
+  store.set(SESSION_COOKIE, await signSession(session), COOKIE_OPTIONS);
 }
 
 export async function clearSessionCookie(): Promise<void> {

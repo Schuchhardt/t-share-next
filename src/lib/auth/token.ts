@@ -17,6 +17,13 @@ export type Session = {
   email: string;
   name: string;
   mustChangePassword: boolean;
+  /**
+   * True when the teacher got in through an emailed access link instead of a
+   * password. They proved they own the inbox, not that they know the old
+   * password — so /cambiar-password stops asking them for it, and asks only
+   * for the new one.
+   */
+  viaAccessLink?: boolean;
 };
 
 function secret(): Uint8Array {
@@ -34,6 +41,7 @@ export async function signSession(session: Session): Promise<string> {
     email: session.email,
     name: session.name,
     mustChangePassword: session.mustChangePassword,
+    viaAccessLink: session.viaAccessLink === true,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(String(session.userId))
@@ -54,6 +62,7 @@ export async function verifySession(token: string | undefined): Promise<Session 
       email: typeof payload.email === "string" ? payload.email : "",
       name: typeof payload.name === "string" ? payload.name : "",
       mustChangePassword: payload.mustChangePassword === true,
+      viaAccessLink: payload.viaAccessLink === true,
     };
   } catch {
     return null;

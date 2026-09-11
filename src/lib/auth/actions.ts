@@ -7,9 +7,11 @@ import { hashPassword, isLegacyHash, verifyPassword } from "@/lib/auth/password"
 import { safeNext } from "@/lib/auth/next-path";
 import { checkPasswordStrength } from "@/lib/auth/strength";
 import {
+  createAccessLink,
   createPasswordReset,
   findPasswordReset,
-  markPasswordResetUsed,
+  hasActiveAccessLink,
+  markTokenUsed,
 } from "@/lib/auth/reset";
 import {
   clearSessionCookie,
@@ -17,12 +19,13 @@ import {
   requireSession,
   setSessionCookie,
 } from "@/lib/auth/session";
-import { notifyPasswordReset, notifyWelcome } from "@/lib/notifications";
+import { notifyAccessLink, notifyPasswordReset, notifyWelcome } from "@/lib/notifications";
 import {
   createAccount,
   emailExists,
   findAccountByEmail,
   findAccountById,
+  recordFailedLogin,
   recordLogin,
   setPassword,
   type AccountRow,
@@ -42,6 +45,13 @@ export type FormState = {
   error: string | null;
   /** A confirmation to show in place of an error, e.g. "revisa tu correo". */
   notice?: string | null;
+  /**
+   * How many times in a row this form came back with an error. Counted in the
+   * browser by `AuthForm`, never here: the sign-in form has to be able to say
+   * "te mandamos un enlace" after the second miss without the server having to
+   * admit whether the address exists.
+   */
+  attempts?: number;
 };
 
 /** What every action returns when the form itself is wrong. */
@@ -71,6 +81,31 @@ function displayName(account: AccountRow): string {
   return [account.first_name, account.last_name].filter(Boolean).join(" ").trim() || account.email;
 }
 
+/** Wrong passwords in a row before the access link is offered. */
+const FAILURES_BEFORE_ACCESS_LINK = 2;
+
+/**
+ * Mails a one-use link that signs the teacher straight in.
+ *
+ * Only ever one live link per account: while the last one is unused and
+ * unexpired nothing new is sent, so someone hammering a stranger's address
+ * cannot use the sign-in form as a way to fill that inbox. Failures are
+ * swallowed — this runs after the response, and a teacher who was going to
+ * see "correo o contraseña incorrectos" still sees exactly that.
+ */
+async function offerAccessLink(account: AccountRow): Promise<void> {
+  try {
+    if (await hasActiveAccessLink(account.id)) return;
+    const token = await createAccessLink(account.id);
+    await notifyAccessLink(
+      { email: account.email, name: account.first_name || displayName(account) },
+      token,
+    );
+  } catch (err) {
+    console.error("[auth] no se pudo ofrecer el enlace de acceso:", err);
+  }
+}
+
 export async function signIn(_prev: FormState, formData: FormData): Promise<FormState> {
   const parsed = signInSchema.safeParse({
     email: formData.get("email"),
@@ -86,7 +121,16 @@ export async function signIn(_prev: FormState, formData: FormData): Promise<Form
   // not become a way to discover which addresses are registered.
   const invalid = fail("Correo o contraseña incorrectos.");
   if (!account || account.deleted_at) return invalid;
-  if (!(await verifyPassword(password, account.password_hash))) return invalid;
+
+  if (!(await verifyPassword(password, account.password_hash))) {
+    const attempts = await recordFailedLogin(account);
+    // Two misses in a row reads as "no me acuerdo", not as a typo. Rather
+    // than let a teacher keep guessing, mail them a link that signs them in
+    // and asks for a new password. `after` keeps the send off the response,
+    // and `offerAccessLink` is the one that decides whether to send at all.
+    if (attempts >= FAILURES_BEFORE_ACCESS_LINK) after(() => offerAccessLink(account));
+    return invalid;
+  }
 
   // A hash this app wrote means the account is already migrated, whatever the
   // column says.
@@ -149,7 +193,7 @@ export async function signUp(_prev: FormState, formData: FormData): Promise<Form
     mustChangePassword: false,
   });
 
-  // The old app sent this from `UserController@store`. `after` keeps SendGrid
+  // The old app sent this from `UserController@store`. `after` keeps the mail
   // off the critical path — it still runs when the redirect below throws.
   after(() => notifyWelcome({ email: account.email, name: firstName }));
 
@@ -158,7 +202,10 @@ export async function signUp(_prev: FormState, formData: FormData): Promise<Form
 
 const changePasswordSchema = z
   .object({
-    currentPassword: z.string().min(1, "Escribe tu contraseña actual."),
+    // Not required by the schema: a teacher who arrived through an access
+    // link never saw this field. `changePassword` demands it for everybody
+    // else, where its absence is a form that was tampered with.
+    currentPassword: z.string().nullish(),
     password: z.string(),
     // `formData.get` answers null for a field the form does not have, and the
     // forced screen has no `next`. Optional alone would reject that null.
@@ -172,7 +219,10 @@ const changePasswordSchema = z
 
 /**
  * The screen every migrated account passes through once. It asks for the old
- * password again so a borrowed session cannot silently take over the account.
+ * password again so a borrowed session cannot silently take over the account
+ * — except for a session opened by an emailed access link, which already
+ * proved the same thing, and whose whole point is that the old password is
+ * the one thing the teacher does not have.
  */
 export async function changePassword(_prev: FormState, formData: FormData): Promise<FormState> {
   const session = await requireSession();
@@ -197,8 +247,14 @@ export async function changePassword(_prev: FormState, formData: FormData): Prom
   const weak = checkPasswordStrength(parsed.data.password, account.email);
   if (weak) return fail(weak);
 
-  if (!(await verifyPassword(parsed.data.currentPassword, account.password_hash))) {
-    return fail("Tu contraseña actual no es correcta.");
+  // The flag lives in the signed session cookie, so it is this app's word and
+  // not the browser's.
+  if (!session.viaAccessLink) {
+    const current = parsed.data.currentPassword ?? "";
+    if (!current) return fail("Escribe tu contraseña actual.");
+    if (!(await verifyPassword(current, account.password_hash))) {
+      return fail("Tu contraseña actual no es correcta.");
+    }
   }
 
   if (await verifyPassword(parsed.data.password, account.password_hash)) {
@@ -206,7 +262,9 @@ export async function changePassword(_prev: FormState, formData: FormData): Prom
   }
 
   await setPassword(session.userId, await hashPassword(parsed.data.password));
-  await setSessionCookie({ ...session, mustChangePassword: false });
+  // Both flags are spent: the hash is this app's now, and the link that
+  // opened the session has no more privileges to grant.
+  await setSessionCookie({ ...session, mustChangePassword: false, viaAccessLink: false });
 
   // The forced screen sends everyone to the repository; the profile sends them
   // back to the profile. `safeNext` keeps a crafted value same-origin.
@@ -288,7 +346,7 @@ export async function resetPassword(_prev: FormState, formData: FormData): Promi
   if (weak) return fail(weak);
 
   await setPassword(account.id, await hashPassword(parsed.data.password));
-  await markPasswordResetUsed(lookup.rowId);
+  await markTokenUsed(lookup.rowId);
 
   redirect("/entrar?password=cambiada");
 }

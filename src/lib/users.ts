@@ -19,11 +19,13 @@ export type AccountRow = {
   last_name: string | null;
   password_hash: string;
   must_change_password: boolean;
+  /** Failed sign-ins since the last successful one. See `recordFailedLogin`. */
+  login_attempts: number;
   deleted_at: string | null;
 };
 
 const ACCOUNT_COLUMNS =
-  "id, email, first_name, last_name, password_hash, must_change_password, deleted_at";
+  "id, email, first_name, last_name, password_hash, must_change_password, login_attempts, deleted_at";
 
 export async function findAccountByEmail(email: string): Promise<AccountRow | null> {
   const { data, error } = await db()
@@ -122,6 +124,26 @@ export async function updateProfile(
 
   const { error } = await db().from(T.users).update(patch).eq("id", userId);
   if (error) throw new Error(`update profile: ${error.message}`);
+}
+
+/**
+ * Counts a wrong password and reports the new total.
+ *
+ * Read-modify-write rather than an atomic increment, which PostgREST cannot
+ * express without a stored function. Two failures racing could count as one;
+ * the number only decides whether to offer an access link, so a lost count
+ * costs a teacher one more attempt, not a lock-out. `recordLogin` puts it
+ * back to zero on the next success.
+ */
+export async function recordFailedLogin(account: AccountRow): Promise<number> {
+  const attempts = (account.login_attempts ?? 0) + 1;
+  const { error } = await db()
+    .from(T.users)
+    .update({ login_attempts: attempts })
+    .eq("id", account.id);
+  // Bookkeeping: a failed write must not turn a wrong password into a 500.
+  if (error) console.warn(`record failed login: ${error.message}`);
+  return attempts;
 }
 
 export async function recordLogin(userId: number): Promise<void> {

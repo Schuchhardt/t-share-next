@@ -24,12 +24,12 @@ const GUEST_ONLY = ["/entrar", "/registro"];
 const CHANGE_PASSWORD = "/cambiar-password";
 
 /**
- * The reset-by-email screens. A migrated teacher who is being held on
+ * The screens an emailed link opens. A migrated teacher who is being held on
  * /cambiar-password may well be there because they do not remember the old
- * password either — bouncing them off their own reset link would leave them
- * with no way out.
+ * password either — bouncing them off their own reset or access link would
+ * leave them with no way out.
  */
-const RESET_BY_EMAIL = ["/recuperar-clave", "/cambiar-clave"];
+const EMAIL_LINKS = ["/recuperar-clave", "/cambiar-clave", "/acceso"];
 
 function matches(pathname: string, routes: string[]): boolean {
   return routes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
@@ -51,7 +51,7 @@ export default async function proxy(request: NextRequest) {
   if (
     session.mustChangePassword &&
     pathname !== CHANGE_PASSWORD &&
-    !matches(pathname, RESET_BY_EMAIL)
+    !matches(pathname, EMAIL_LINKS)
   ) {
     return NextResponse.redirect(new URL(CHANGE_PASSWORD, request.url));
   }

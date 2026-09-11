@@ -55,15 +55,29 @@ export const env = {
   get s3PublicBaseUrl(): string | null {
     return process.env.S3_PUBLIC_BASE_URL?.replace(/\/$/, "") ?? null;
   },
-  /** SendGrid, which is what the Laravel app sent its mail through. */
-  get sendgridApiKey(): string {
-    return required("SENDGRID_API_KEY");
+  /** Resend, which is what sends every transactional mail. */
+  get resendApiKey(): string {
+    return required("RESEND_API_KEY");
   },
+  /**
+   * The envelope sender. It has to live on the domain verified in Resend —
+   * `email.t-share.org`, a subdomain, so the DKIM and SPF records for it do
+   * not touch the MX of the main domain and the team keeps reading mail at
+   * t-share.org as always.
+   */
   get mailFrom(): string {
-    return process.env.MAIL_FROM_ADDRESS ?? "comunidad@t-share.org";
+    return process.env.RESEND_EMAIL_ADDRESS ?? "comunidad@email.t-share.org";
   },
   get mailFromName(): string {
     return process.env.MAIL_FROM_NAME ?? "T-share";
+  },
+  /**
+   * Where an answer should land. The sending subdomain has no inbox, so a
+   * teacher who hits "responder" would be writing into a void; this points
+   * them at the mailbox somebody actually reads.
+   */
+  get mailReplyTo(): string {
+    return process.env.MAIL_REPLY_TO ?? "comunidad@t-share.org";
   },
   /**
    * The canonical origin, used to build the links inside an email — a request
@@ -88,5 +102,5 @@ export function hasStorageConfig(): boolean {
 
 /** True when mail can actually leave the machine. */
 export function hasEmailConfig(): boolean {
-  return Boolean(process.env.SENDGRID_API_KEY);
+  return Boolean(process.env.RESEND_API_KEY);
 }

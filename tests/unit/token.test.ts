@@ -12,6 +12,7 @@ const session: Session = {
   email: "angela@example.cl",
   name: "Angela Palma",
   mustChangePassword: true,
+  viaAccessLink: false,
 };
 
 beforeAll(() => {
@@ -28,6 +29,17 @@ describe("session tokens", () => {
       await signSession({ ...session, mustChangePassword: false }),
     );
     expect(relaxed?.mustChangePassword).toBe(false);
+  });
+
+  it("carries the access-link flag, which is what lets /cambiar-password stop asking for the old password", async () => {
+    const viaLink = await verifySession(await signSession({ ...session, viaAccessLink: true }));
+    expect(viaLink?.viaAccessLink).toBe(true);
+  });
+
+  it("treats a session without the flag as one that knows its password", async () => {
+    const plain: Session = { ...session };
+    delete plain.viaAccessLink;
+    expect((await verifySession(await signSession(plain)))?.viaAccessLink).toBe(false);
   });
 
   it("rejects a tampered token", async () => {
