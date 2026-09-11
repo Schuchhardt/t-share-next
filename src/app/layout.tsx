@@ -1,9 +1,18 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { JsonLd } from "@/components/json-ld";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getSession } from "@/lib/auth/session";
+import {
+  SITE_DESCRIPTION,
+  SITE_TAGLINE,
+  SITE_TITLE,
+  organizationJsonLd,
+  siteUrl,
+  websiteJsonLd,
+} from "@/lib/seo";
 
 // Self-hosted from the Raleway family the current site already ships.
 const raleway = localFont({
@@ -18,23 +27,40 @@ const raleway = localFont({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://t-share.org"),
-  title: {
-    default: "T-share · Actividades de clase, listas para usar",
-    template: "%s · T-share",
-  },
-  description:
-    "Un repositorio de actividades hechas por profesores. Busca por nivel, asignatura u objetivo de aprendizaje, y descarga los documentos.",
+  // `APP_URL`, so a deployment's canonicals and social images point at the
+  // host actually serving them. In production it is https://t-share.org.
+  metadataBase: new URL(siteUrl()),
+  title: { default: SITE_TITLE, template: "%s · T-share" },
+  description: SITE_DESCRIPTION,
+  applicationName: "T-share",
   // The icon and the social preview come from `icon.svg`, `apple-icon.png` and
-  // `opengraph-image.tsx` in this directory.
+  // `opengraph-image.tsx` in this directory. An activity adds its own.
   openGraph: {
     type: "website",
     locale: "es_CL",
     siteName: "T-share",
-    title: "Actividades de clase, listas para usar.",
-    description:
-      "Un repositorio de actividades hechas por profesores. Busca por nivel, asignatura u objetivo de aprendizaje, y descarga los documentos.",
+    title: SITE_TAGLINE,
+    description: SITE_DESCRIPTION,
   },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TAGLINE,
+    description: SITE_DESCRIPTION,
+  },
+  // The repository is public and meant to be found; the private screens turn
+  // this off one by one.
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1 },
+  },
+  formatDetection: { telephone: false },
+};
+
+/** Matches the indigo the header and the buttons are painted in. */
+export const viewport: Viewport = {
+  themeColor: "#363795",
+  colorScheme: "light",
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
@@ -45,6 +71,10 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="es" className={`${raleway.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
+        {/* Who publishes the site and how its search works — the same two
+            entities on every page, which the per-page graphs point back to. */}
+        <JsonLd data={organizationJsonLd()} />
+        <JsonLd data={websiteJsonLd()} />
         <SiteHeader user={session ? { name: session.name } : null} />
         <main className="mx-auto w-full max-w-[1060px] px-7 pb-30">{children}</main>
         <SiteFooter />

@@ -43,6 +43,7 @@ src/
     users.ts          cuentas y perfil
     storage.ts        S3: subida y URLs firmadas
     preview.ts        qué archivos se pueden mostrar sin descargar
+    seo.ts            canonical, snippets y datos estructurados
     email.ts          envío por SendGrid
     notifications.ts  los tres correos que manda la aplicación
     auth/             contraseñas y su formato, token de sesión, acciones de
@@ -71,6 +72,36 @@ Las URLs se mantienen iguales a las del front Angular para no romper enlaces ni 
 | `/cambiar-password` | Cambio de contraseña (forzado tras la migración) | con cuenta |
 | `/recuperar-clave` | Pedir un enlace de recuperación por correo | público |
 | `/cambiar-clave` | Elegir contraseña nueva desde ese enlace | con el token |
+| `/sitemap.xml`, `/robots.txt` | Generados desde la base (ver [SEO](#seo)) | público |
+
+## SEO
+
+Las URLs son las mismas del sitio Angular, así que lo que ya estaba indexado
+sigue resolviendo. Sobre eso:
+
+- **`APP_URL` es el origen canónico.** De ahí salen el `metadataBase`, los
+  `<link rel="canonical">`, el sitemap y las URLs de las imágenes sociales. En
+  producción tiene que ser `https://t-share.org`; si queda apuntando a otro
+  lado, el sitio se indexa con ese otro dominio.
+- **`/sitemap.xml`** lista la portada, `/actividades`, cada asignatura con
+  actividades detrás y las ~920 fichas, con la fecha de `updated_at`. Se
+  regenera cada hora. **`/robots.txt`** lo anuncia y cierra las pantallas de
+  cuenta.
+- **Cada actividad tiene su propia tarjeta social**, dibujada en
+  `opengraph-image.tsx` con el título, la ficha y el autor. No se usa la
+  portada de la actividad: el bucket es privado, su URL firmada dura seis horas
+  y un enlace compartido el lunes se vería roto el martes.
+- **Datos estructurados** (JSON-LD): `Organization` y `WebSite` en todas las
+  páginas, y en cada ficha un `LearningResource` con objetivo, asignatura,
+  nivel y duración, más su `BreadcrumbList`. No se declara `aggregateRating`:
+  la columna `rating` que llegó en la migración no tiene votos detrás, y una
+  nota sin ellos es justo lo que Google penaliza.
+- **Qué se indexa de `/actividades`.** La página base y la de una sola faceta
+  —una asignatura, un nivel— son categorías reales y se indexan. Una búsqueda,
+  varias facetas juntas o una página dos llevan `noindex, follow`: no entran al
+  índice, pero el crawler igual pasa por ellas hasta las fichas.
+- **Fuera del índice**: `/entrar`, `/registro`, `/mi-perfil`,
+  `/actividades/crear` y las tres pantallas de contraseña.
 
 ## Puesta en marcha
 
@@ -127,7 +158,7 @@ Angular (`/recuperar-clave` y `/cambiar-clave?token=…`).
 
 ## Tests
 
-`npm test` corre 184 pruebas unitarias sin necesidad de base de datos. Entre
+`npm test` corre 199 pruebas unitarias sin necesidad de base de datos. Entre
 otras cosas fijan el mapeo de la migración contra los CSV reales, la
 verificación de los hashes `$2y$`, el token de sesión, el armado de filtros y el
 formulario de subida.

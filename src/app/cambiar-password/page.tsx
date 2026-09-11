@@ -2,7 +2,10 @@ import { AuthForm, Field } from "@/components/auth-form";
 import { changePassword } from "@/lib/auth/actions";
 import { getSession } from "@/lib/auth/session";
 
-export const metadata = { title: "Cambiar contraseña" };
+export const metadata = {
+  title: "Cambiar contraseña",
+  robots: { index: false, follow: false },
+};
 
 /**
  * Every account migrated from the old site lands here on its first sign-in:

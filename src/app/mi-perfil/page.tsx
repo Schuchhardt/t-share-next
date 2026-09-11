@@ -4,7 +4,11 @@ import { getActivitiesByAuthor, getSavedActivities } from "@/lib/activities";
 import { getSession } from "@/lib/auth/session";
 import { getProfile } from "@/lib/users";
 
-export const metadata = { title: "Mis actividades" };
+/** Private to one teacher, so it stays out of every index. */
+export const metadata = {
+  title: "Mis actividades",
+  robots: { index: false, follow: false },
+};
 
 /** Everything here is per-teacher, so nothing is cached across requests. */
 export const dynamic = "force-dynamic";

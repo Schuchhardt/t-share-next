@@ -2,7 +2,13 @@ import Link from "next/link";
 import { AuthForm, Field } from "@/components/auth-form";
 import { signIn } from "@/lib/auth/actions";
 
-export const metadata = { title: "Entrar" };
+/** A sign-in form has nothing to offer a search result. */
+export const metadata = {
+  title: "Entrar",
+  description: "Entra a tu cuenta de T-share para guardar actividades, descargarlas y publicar las tuyas.",
+  alternates: { canonical: "/entrar" },
+  robots: { index: false, follow: true },
+};
 
 export default async function EntrarPage({ searchParams }: PageProps<"/entrar">) {
   const sp = await searchParams;

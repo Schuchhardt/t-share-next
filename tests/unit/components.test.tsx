@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { StrictMode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ActivityRow } from "@/components/activity-row";
 import { DocumentList, describe as describeDoc } from "@/components/document-list";
@@ -300,6 +301,29 @@ describe("DocumentList", () => {
     expect(describeDoc({ kind: "Guía", format: "PDF" })).toBe("Guía · PDF");
     expect(describeDoc({ kind: null, format: "DOCX" })).toBe("DOCX");
     expect(describeDoc({ kind: null, format: null })).toBe("Archivo");
+  });
+
+  it("opens the viewer and leaves it open", async () => {
+    const user = userEvent.setup();
+    // StrictMode on purpose: React mounts an effect, tears it down and mounts
+    // it again, which is exactly what used to close the viewer on the frame it
+    // opened — `close()` fires its event on a later task, so a dialog that
+    // closed itself on the way out read as the user dismissing it.
+    render(
+      <DocumentList activityId={42} signedIn={false} documents={[doc({ name: "Guía en PDF" })]} />,
+      { wrapper: StrictMode },
+    );
+
+    await user.click(screen.getByRole("button", { name: "Ver" }));
+    const dialog = await screen.findByRole("dialog");
+    // Long enough for a queued `close` event to land, if one was coming.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(dialog).toBeInTheDocument();
+    expect((dialog as HTMLDialogElement).open).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: "Cerrar ✕" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("says so when there is nothing attached", () => {

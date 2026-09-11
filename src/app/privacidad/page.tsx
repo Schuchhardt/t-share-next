@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { LegalPage, type LegalSection } from "@/components/legal-page";
+import { social } from "@/lib/seo";
 import { SITE } from "@/lib/site";
+
+const DESCRIPTION =
+  "Qué datos personales trata T-share (EDTEK SpA), con qué finalidad, con quién se comparten, por cuánto tiempo se conservan y cómo ejercer tus derechos.";
 
 export const metadata = {
   title: "Política de privacidad",
-  description:
-    "Qué datos personales trata T-share (EDTEK SpA), con qué finalidad, con quién se comparten, por cuánto tiempo se conservan y cómo ejercer tus derechos.",
+  description: DESCRIPTION,
+  alternates: { canonical: "/privacidad" },
+  ...social({ path: "/privacidad", title: "Política de privacidad", description: DESCRIPTION }),
 };
 
 const CONTACTO = <a href={`mailto:${SITE.email}`}>{SITE.email}</a>;

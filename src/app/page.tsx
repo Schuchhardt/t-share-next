@@ -7,6 +7,12 @@ import { SearchBar } from "@/components/search-bar";
 import { countActivities, getRecentActivities } from "@/lib/activities";
 import { getSubjectsWithActivities } from "@/lib/catalog";
 import { FILTER_KEYS } from "@/lib/filters";
+import { SITE_DESCRIPTION, SITE_TAGLINE, social } from "@/lib/seo";
+
+export const metadata = {
+  alternates: { canonical: "/" },
+  ...social({ path: "/", title: SITE_TAGLINE, description: SITE_DESCRIPTION }),
+};
 
 /**
  * The landing page reads three small queries, all of which change rarely, so

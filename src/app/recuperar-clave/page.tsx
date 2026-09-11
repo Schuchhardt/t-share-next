@@ -2,7 +2,10 @@ import Link from "next/link";
 import { AuthForm, Field } from "@/components/auth-form";
 import { requestPasswordReset } from "@/lib/auth/actions";
 
-export const metadata = { title: "Recuperar contraseña" };
+export const metadata = {
+  title: "Recuperar contraseña",
+  robots: { index: false, follow: false },
+};
 
 /**
  * Asking for a reset link. Same path the Angular site used, so links from old

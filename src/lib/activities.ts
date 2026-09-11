@@ -240,6 +240,32 @@ export const getRecentActivities = cache(async (limit = 4): Promise<ActivitySumm
   return Promise.all(rows.map(toSummary));
 });
 
+/**
+ * Every live activity as an id and a last-changed date — the sitemap, and
+ * nothing else, so it reads two columns instead of the whole ficha.
+ *
+ * PostgREST caps a response at 1 000 rows however large `.limit()` asks, and
+ * the catalogue is past that, so this pages until a short page comes back.
+ */
+export async function getActivityIndex(): Promise<{ id: number; updatedAt: string }[]> {
+  const PAGE = 1000;
+  const rows: { id: number; updated_at: string; created_at: string }[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const page = unwrap(
+      await db()
+        .from(T.activities)
+        .select("id, updated_at, created_at")
+        .is(LIVE.column, LIVE.value)
+        .order("id")
+        .range(from, from + PAGE - 1),
+      "activity index",
+    ) as { id: number; updated_at: string; created_at: string }[];
+    rows.push(...page);
+    if (page.length < PAGE) break;
+  }
+  return rows.map((r) => ({ id: r.id, updatedAt: r.updated_at ?? r.created_at }));
+}
+
 export const countActivities = cache(async (): Promise<number> => {
   const { count, error } = await db()
     .from(T.activities)
@@ -290,7 +316,13 @@ type DetailRow = Omit<SummaryRow, "resources"> & {
   resources: (SummaryRow["resources"][number] & { name: string })[];
 };
 
-export async function getActivity(id: number): Promise<ActivityDetail | null> {
+/**
+ * Wrapped in React's `cache` because the detail screen asks for the same
+ * activity twice in a request — once to build the title and the social card in
+ * `generateMetadata`, once to render the page — and this is the heaviest read
+ * in the application.
+ */
+export const getActivity = cache(async (id: number): Promise<ActivityDetail | null> => {
   if (!Number.isInteger(id) || id <= 0) return null;
 
   const { data, error } = await db()
@@ -350,7 +382,7 @@ export async function getActivity(id: number): Promise<ActivityDetail | null> {
     materials: names(liveMaterials.map((m) => m.name)),
     documents,
   };
-}
+});
 
 /** Ids only — used to render "Guardada" state without loading the rows. */
 export async function getSavedActivityIds(userId: number): Promise<number[]> {

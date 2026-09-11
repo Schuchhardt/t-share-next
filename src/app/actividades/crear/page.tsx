@@ -3,7 +3,11 @@ import { CreateActivityForm } from "@/components/create-activity-form";
 import { getSession } from "@/lib/auth/session";
 import { getGrades, getResourceTypes, getSkills, getSubjects, getSuggestedMaterials } from "@/lib/catalog";
 
-export const metadata = { title: "Subir una actividad" };
+/** The form redirects anyone without a session, a crawler included. */
+export const metadata = {
+  title: "Subir una actividad",
+  robots: { index: false, follow: false },
+};
 
 export default async function CrearActividadPage() {
   const session = await getSession();

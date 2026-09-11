@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { LegalPage, type LegalSection } from "@/components/legal-page";
+import { social } from "@/lib/seo";
 import { SITE } from "@/lib/site";
+
+const DESCRIPTION =
+  "Términos y Condiciones de Servicio de EDTEK SpA, que rigen el uso de la plataforma T-share.";
 
 export const metadata = {
   title: "Términos y condiciones",
-  description:
-    "Términos y Condiciones de Servicio de EDTEK SpA, que rigen el uso de la plataforma T-share.",
+  description: DESCRIPTION,
+  alternates: { canonical: "/terminos" },
+  ...social({ path: "/terminos", title: "Términos y condiciones", description: DESCRIPTION }),
 };
 
 /**

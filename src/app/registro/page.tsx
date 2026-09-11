@@ -2,7 +2,12 @@ import Link from "next/link";
 import { AuthForm, Field } from "@/components/auth-form";
 import { signUp } from "@/lib/auth/actions";
 
-export const metadata = { title: "Crear cuenta" };
+export const metadata = {
+  title: "Crear cuenta",
+  description: "Crea una cuenta gratuita en T-share para guardar actividades, descargarlas y publicar las tuyas.",
+  alternates: { canonical: "/registro" },
+  robots: { index: false, follow: true },
+};
 
 export default function RegistroPage() {
   return (

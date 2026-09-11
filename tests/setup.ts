@@ -60,3 +60,33 @@ if (typeof window !== "undefined") {
     },
   });
 }
+
+/**
+ * jsdom knows the `<dialog>` element but implements none of its behaviour:
+ * `showModal` and `close` are missing, so the document preview could not be
+ * rendered in a test at all.
+ *
+ * This is that behaviour in miniature, and it keeps the one detail the
+ * preview's own bug turned on: `close()` fires its event on a later task, not
+ * synchronously. A stub that dispatched it inline would let the regression
+ * back in without a test noticing.
+ */
+if (typeof window !== "undefined" && !window.HTMLDialogElement.prototype.showModal) {
+  const proto = window.HTMLDialogElement.prototype;
+
+  proto.show = function show(this: HTMLDialogElement) {
+    if (!this.open) this.setAttribute("open", "");
+  };
+
+  proto.showModal = function showModal(this: HTMLDialogElement) {
+    if (this.open) throw new DOMException("The dialog is already open", "InvalidStateError");
+    this.setAttribute("open", "");
+  };
+
+  proto.close = function close(this: HTMLDialogElement, returnValue?: string) {
+    if (!this.open) return;
+    this.removeAttribute("open");
+    if (returnValue !== undefined) this.returnValue = returnValue;
+    setTimeout(() => this.dispatchEvent(new Event("close")), 0);
+  };
+}

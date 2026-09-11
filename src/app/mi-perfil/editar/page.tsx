@@ -5,7 +5,10 @@ import { ProfileForm } from "@/components/profile-form";
 import { getSession } from "@/lib/auth/session";
 import { getProfile } from "@/lib/users";
 
-export const metadata = { title: "Editar perfil" };
+export const metadata = {
+  title: "Editar perfil",
+  robots: { index: false, follow: false },
+};
 
 /** Per-teacher, so nothing here is cached across requests. */
 export const dynamic = "force-dynamic";

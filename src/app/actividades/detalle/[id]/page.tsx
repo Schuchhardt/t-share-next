@@ -1,22 +1,60 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActivityActions } from "@/components/activity-actions";
 import { ActivityCover } from "@/components/activity-cover";
 import { CommentThread } from "@/components/comment-thread";
 import { DocumentList } from "@/components/document-list";
+import { JsonLd } from "@/components/json-ld";
 import { getActivity, getSavedActivityIds } from "@/lib/activities";
 import { getComments } from "@/lib/comments";
 import { getSession } from "@/lib/auth/session";
 import { formatDate, formatDuration, joinEs, metaLine } from "@/lib/format";
+import {
+  activityDescription,
+  activityJsonLd,
+  activityTitle,
+  breadcrumbJsonLd,
+} from "@/lib/seo";
 import type { ActivityDocument } from "@/lib/types";
 
-export async function generateMetadata({ params }: PageProps<"/actividades/detalle/[id]">) {
+/**
+ * The activity is what gets shared, so this is the screen whose metadata
+ * matters most.
+ *
+ * The Open Graph block is spelled out rather than inherited: without it a
+ * pasted link would carry the site's own title and pitch, and every activity
+ * in a WhatsApp group would preview as the same card. The image is not set
+ * here on purpose — `opengraph-image.tsx` in this directory draws one per
+ * activity and Next.js attaches it.
+ */
+export async function generateMetadata({
+  params,
+}: PageProps<"/actividades/detalle/[id]">): Promise<Metadata> {
   const { id } = await params;
   const activity = await getActivity(Number(id));
-  if (!activity) return { title: "Actividad no encontrada" };
+  if (!activity) {
+    return { title: "Actividad no encontrada", robots: { index: false, follow: true } };
+  }
+
+  const description = activityDescription(activity);
+  const path = `/actividades/detalle/${activity.id}`;
+
   return {
-    title: activity.title,
-    description: activity.learningObjective ?? activity.description ?? undefined,
+    title: activityTitle(activity),
+    description,
+    alternates: { canonical: path },
+    openGraph: {
+      type: "article",
+      locale: "es_CL",
+      siteName: "T-share",
+      url: path,
+      title: activity.title,
+      description,
+      publishedTime: activity.createdAt,
+      ...(activity.author ? { authors: [activity.author.name] } : {}),
+    },
+    twitter: { card: "summary_large_image", title: activity.title, description },
   };
 }
 
@@ -61,6 +99,18 @@ export default async function DetallePage({ params }: PageProps<"/actividades/de
 
   return (
     <>
+      {/* The ficha as structured data: objective, grade, subject and duration
+          are exactly what a teacher searches for, and only this says so in a
+          form a search engine reads. */}
+      <JsonLd data={activityJsonLd(activity)} />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: "Inicio", path: "/" },
+          { name: "Actividades", path: "/actividades" },
+          { name: activity.title, path: `/actividades/detalle/${activity.id}` },
+        ])}
+      />
+
       <section className="pt-[30px]">
         <Link href="/actividades" className="text-sm">
           ← Volver a resultados

@@ -161,6 +161,15 @@ function DocumentRow({
  * The full-size viewer. A native `<dialog>` brings the focus trap, the
  * backdrop and Escape with it, so there is no keyboard handling to get wrong
  * here — only the click-outside-to-close, which `<dialog>` leaves to us.
+ *
+ * Every way out calls `onClose` directly and the parent unmounts the dialog;
+ * nothing here listens for the `close` event or closes the element by hand.
+ * That is deliberate. `close()` fires its event on a later task, so a viewer
+ * that closed itself on the way out — which is what the cleanup used to do —
+ * had the event land after React had already re-run the effect and re-opened
+ * it, reading as the user dismissing a viewer that had just appeared. In
+ * development, where React mounts an effect twice on purpose, that happened
+ * on the very first frame: the modal opened and vanished in the same tick.
  */
 function PreviewDialog({ item, onClose }: { item: Previewing; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -168,23 +177,32 @@ function PreviewDialog({ item, onClose }: { item: Previewing; onClose: () => voi
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    dialog.showModal();
-    // The page behind should not scroll while the viewer is up.
+    // Already open when React re-runs this effect on a development remount,
+    // and `showModal` on an open dialog throws.
+    if (!dialog.open) dialog.showModal();
+
+    // The page behind should not scroll while the viewer is up. Removing the
+    // dialog from the DOM takes it out of the top layer on its own, so the
+    // cleanup has nothing to do but put the scrollbar back.
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previous;
-      if (dialog.open) dialog.close();
     };
   }, []);
 
   return (
     <dialog
       ref={ref}
-      onClose={onClose}
+      // Escape. Letting the default run would close the element under React;
+      // unmounting it is the same result and keeps one way out.
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
       onClick={(event) => {
         // The dialog element itself is the backdrop area around the panel.
-        if (event.target === ref.current) ref.current?.close();
+        if (event.target === ref.current) onClose();
       }}
       className="m-auto w-[min(1000px,92vw)] max-w-none rounded-md border border-line bg-white p-0 backdrop:bg-ink/60"
     >
@@ -201,7 +219,7 @@ function PreviewDialog({ item, onClose }: { item: Previewing; onClose: () => voi
           </a>
           <button
             type="button"
-            onClick={() => ref.current?.close()}
+            onClick={onClose}
             className="cursor-pointer border-none bg-transparent p-0 text-sm font-semibold text-muted hover:text-ink"
           >
             Cerrar ✕

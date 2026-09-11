@@ -3,7 +3,10 @@ import { AuthForm, Field } from "@/components/auth-form";
 import { resetPassword } from "@/lib/auth/actions";
 import { findPasswordReset } from "@/lib/auth/reset";
 
-export const metadata = { title: "Elegir una contraseña nueva" };
+export const metadata = {
+  title: "Elegir una contraseña nueva",
+  robots: { index: false, follow: false },
+};
 
 /**
  * The screen an emailed reset link opens. Same path and query parameter the
