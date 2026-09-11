@@ -11,6 +11,18 @@
 [build.environment]
   NODE_VERSION = "22"
 
+  # La caché persistente de Turbopack anota las variables de entorno con las
+  # que compiló —valor incluido— para saber cuándo invalidar, así que todos los
+  # secretos del sitio terminan dentro de esos .sst. No es algo que se
+  # publique: `.next/cache` no se despliega, solo se guarda entre builds, y
+  # revisado archivo por archivo la key no aparece en `.next/server`,
+  # `.next/static` ni en ningún manifest.
+  #
+  # Se excluye la ruta y no la variable a propósito: con SECRETS_SCAN_OMIT_KEYS
+  # se dejaría de revisar esa key *en todas partes*, incluido el output real.
+  # Así el escaneo sigue cubriendo lo que sí se sirve, para todos los secretos.
+  SECRETS_SCAN_OMIT_PATHS = ".next/cache/**,.netlify/.next/cache/**"
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 

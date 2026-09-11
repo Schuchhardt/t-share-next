@@ -271,6 +271,14 @@ variables de `.env.example`: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
 llena, la aplicación entrega la URL sin firmar y todas las imágenes y descargas
 del sitio responden 403.
 
+`netlify.toml` excluye `.next/cache/**` del escaneo de secretos. La caché
+persistente de Turbopack anota las variables de entorno con las que compiló
+—valor incluido— para saber cuándo invalidar, así que todos los secretos del
+sitio aparecen dentro de esos `.sst` y el build falla con "Secrets scanning
+found secrets in build". Esa caché no se publica: solo se guarda entre builds.
+Se excluye la ruta y no la variable a propósito, porque `SECRETS_SCAN_OMIT_KEYS`
+dejaría de revisar esa key también en el output que sí se sirve.
+
 ```bash
 netlify link      # una vez
 netlify deploy --build --prod
