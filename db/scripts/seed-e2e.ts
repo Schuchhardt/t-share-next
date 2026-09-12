@@ -47,7 +47,7 @@ export async function dropE2E(db: SupabaseClient = client()) {
     ['tshare_comments', [900037]],
     ['tshare_saved_activities', [900038]],
     ['tshare_activities', [E2E.activity.id, E2E.quietActivity.id]],
-    ['tshare_users', [E2E.legacyUser.id, E2E.modernUser.id]],
+    ['tshare_users', [E2E.legacyUser.id, E2E.modernUser.id, E2E.recoveryUser.id]],
     ['tshare_subject_grades', [E2E.subjectGrade.id]],
     ['tshare_subjects', [E2E.subject.id, E2E.otherSubject.id]],
     ['tshare_grades', [E2E.grade.id]],
@@ -81,6 +81,10 @@ async function insert(db: SupabaseClient) {
     { id: E2E.resourceType.id, name: E2E.resourceType.name },
   ]);
 
+  // Every row carries the same keys on purpose: a PostgREST upsert sends one
+  // column list for the whole batch, so a field present on only one of them
+  // arrives as null on the others — and `login_attempts` is not nullable.
+  // Zero is also what the recovery specs need as a starting point.
   await upsert(db, 'tshare_users', [
     {
       id: E2E.legacyUser.id,
@@ -92,6 +96,7 @@ async function insert(db: SupabaseClient) {
       password_hash: await legacyHash(E2E.legacyUser.password),
       must_change_password: true,
       is_active: true,
+      login_attempts: 0,
     },
     {
       id: E2E.modernUser.id,
@@ -101,6 +106,17 @@ async function insert(db: SupabaseClient) {
       password_hash: await bcrypt.hash(E2E.modernUser.password, 10),
       must_change_password: false,
       is_active: true,
+      login_attempts: 0,
+    },
+    {
+      id: E2E.recoveryUser.id,
+      email: E2E.recoveryUser.email,
+      first_name: E2E.recoveryUser.firstName,
+      last_name: E2E.recoveryUser.lastName,
+      password_hash: await bcrypt.hash(E2E.recoveryUser.password, 10),
+      must_change_password: false,
+      is_active: true,
+      login_attempts: 0,
     },
   ]);
 

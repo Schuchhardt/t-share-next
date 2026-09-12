@@ -60,5 +60,15 @@ export default defineConfig({
           timeout: 120_000,
           stdout: "pipe",
           stderr: "pipe",
+          env: {
+            // No real sending during the suite. The fixtures live at
+            // `@t-share.test`, so every message would bounce and cost the
+            // sending domain its reputation. Blank, `sendEmail` logs the
+            // message and answers false, and the rest of the flow — the token
+            // row, /acceso, /cambiar-clave — runs exactly as in production.
+            // An empty value survives: `@next/env` only fills in variables
+            // that are undefined, never ones the parent process already set.
+            RESEND_API_KEY: "",
+          },
         },
 });

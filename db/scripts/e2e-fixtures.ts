@@ -23,6 +23,19 @@ export const E2E = {
     firstName: 'Nadia',
     lastName: 'Nueva',
   },
+  /**
+   * A third account, used only by the password-recovery and access-link
+   * specs. Those tests end up *changing* the password they signed in with, so
+   * they get an account of their own rather than leaving `modernUser` in a
+   * state the other files did not expect.
+   */
+  recoveryUser: {
+    id: 900003,
+    email: 'e2e.recupera@t-share.test',
+    password: 'clave-recupera-2026',
+    firstName: 'Rita',
+    lastName: 'Recupera',
+  },
   country: { id: 900010, name: 'Paisdemo' },
   subject: { id: 900011, name: 'Asignatura E2E' },
   grade: { id: 900012, name: '9 a 10 años E2E', description: 'Nivel E2E' },

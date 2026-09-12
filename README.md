@@ -256,6 +256,15 @@ npm run db:seed:e2e -- --drop   # limpiar
 Sin credenciales en `.env.local` la suite se reporta como *skipped* en vez de
 fallar, así que `npm test && npm run test:e2e` es seguro en cualquier máquina.
 
+`recuperar-clave.spec.ts` cubre los dos enlaces por correo de punta a punta:
+que pedir uno deja la fila que corresponde, que abrirlo hace lo que promete,
+que se gasta de una sola vez y que un token no sirve para el otro flujo. El
+correo en sí no se manda: `playwright.config.ts` arranca el servidor con
+`RESEND_API_KEY` en blanco, porque los fixtures viven en `@t-share.test` y cada
+mensaje rebotaría a costa de la reputación del dominio. Como la tabla guarda
+solo un SHA-256, las pruebas plantan un token cuyo valor ya conocen en lugar de
+leer un buzón.
+
 ## Deploy en Netlify
 
 `netlify.toml` ya está configurado con `@netlify/plugin-nextjs`, que corre los

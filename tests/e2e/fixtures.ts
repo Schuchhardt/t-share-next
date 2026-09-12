@@ -32,8 +32,19 @@ export async function signIn(page: Page, email: string, password: string) {
   await page.getByRole("button", { name: "Entrar" }).click();
 }
 
+/**
+ * Waits for the answer, not just for the header to change.
+ *
+ * "Salir" posts a server action, and the `Set-Cookie` that expires the
+ * session rides on its response. The re-rendered header can show "Entrar"
+ * before the browser has processed that header, so asserting on the header
+ * alone leaves the next `signIn` racing a session that is still in the jar —
+ * which is what made this flake.
+ */
 export async function signOut(page: Page) {
+  const answered = page.waitForResponse((r) => r.request().method() === "POST");
   await page.getByRole("button", { name: "Salir" }).click();
+  await answered;
   await expect(page.getByRole("link", { name: "Entrar" })).toBeVisible();
 }
 

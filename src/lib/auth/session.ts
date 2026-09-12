@@ -45,9 +45,20 @@ export async function setSessionCookie(session: Session): Promise<void> {
   store.set(SESSION_COOKIE, await signSession(session), COOKIE_OPTIONS);
 }
 
+/**
+ * Signs the teacher out.
+ *
+ * It expires the cookie by writing it again with the same attributes rather
+ * than calling `store.delete(name)`. `delete` sends no `Path`, so the browser
+ * falls back to the path of the request — and "Salir" is pressed from
+ * /actividades or /mi-perfil, never from "/". The expiry then landed on a
+ * *different* cookie and the real one, at `Path=/`, stayed in the browser:
+ * the page came back rendered as signed out, because the action had cleared
+ * its own request's store, and the next navigation was signed in again.
+ */
 export async function clearSessionCookie(): Promise<void> {
   const store = await cookies();
-  store.delete(SESSION_COOKIE);
+  store.set(SESSION_COOKIE, "", { ...COOKIE_OPTIONS, maxAge: 0 });
 }
 
 /** The current session, or null when nobody is signed in. */
