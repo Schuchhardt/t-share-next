@@ -4,9 +4,12 @@ import { hasAdminConfig } from "@/lib/env";
 /**
  * La puerta del panel: una llave, sin correo y sin cuenta.
  *
- * Es la única pantalla de /admin a la que el proxy deja llegar sin sesión. Si
- * `ADMIN_KEY` no está puesta lo dice aquí en vez de dejar que alguien pruebe
- * llaves contra un panel que no existe.
+ * Es la única pantalla de /admin a la que el proxy deja llegar sin sesión, así
+ * que es la única que ve cualquiera que pase por la URL. No nombra la variable
+ * de entorno detrás de la llave ni dice que sea una: a quien administra el
+ * sitio no le hace falta leerlo acá, y a cualquier otro le estaría diciendo
+ * dónde buscar. Cuando no está configurada, la pantalla dice que el panel no
+ * está disponible y nada más — que es también lo único que hace falta saber.
  */
 export default async function AdminEntrarPage({ searchParams }: PageProps<"/admin/entrar">) {
   const sp = await searchParams;
@@ -20,15 +23,13 @@ export default async function AdminEntrarPage({ searchParams }: PageProps<"/admi
       {enabled ? (
         <>
           <p className="mb-6 text-sm text-muted">
-            Escribe la llave del panel. Es la variable de entorno <code>ADMIN_KEY</code>, no la
-            contraseña de ninguna cuenta.
+            Escribe la llave del panel. No es la contraseña de ninguna cuenta.
           </p>
           <KeyForm next={next} />
         </>
       ) : (
         <p className="rounded-sm bg-mint px-4 py-3 text-sm text-mint-strong">
-          El panel no está habilitado en este entorno. Pon <code>ADMIN_KEY</code> en las variables
-          de entorno (o en <code>.env.local</code>) y vuelve a levantar la aplicación.
+          El panel no está disponible en este entorno.
         </p>
       )}
     </section>

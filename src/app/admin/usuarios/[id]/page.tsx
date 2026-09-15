@@ -70,7 +70,7 @@ export default async function AdminUsuarioPage({
               {activities.items.map((activity) => (
                 <li key={activity.id}>
                   <Link href={`/admin/actividades/${activity.id}`}>{activity.title}</Link>
-                  {activity.deletedAt && <span className="text-xs text-muted"> · borrada</span>}
+                  {activity.deletedAt && <span className="text-xs text-muted"> · archivada</span>}
                 </li>
               ))}
               {activities.total > activities.items.length && (
@@ -85,7 +85,6 @@ export default async function AdminUsuarioPage({
         <DangerZone
           id={user.id}
           deleted={Boolean(user.deletedAt)}
-          confirmation={user.email}
           what="La cuenta"
           cascade={`sus ${activities.total} actividad${activities.total === 1 ? "" : "es"}, sus comentarios, sus guardados y sus descargas`}
           onDelete={deleteUser}

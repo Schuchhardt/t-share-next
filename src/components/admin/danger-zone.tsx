@@ -1,23 +1,25 @@
 import { ConfirmSubmit, Panel } from "@/components/admin/ui";
 
 /**
- * Borrar, restaurar y eliminar, que son tres cosas distintas.
+ * Archivar, restaurar y eliminar, que son tres cosas distintas.
  *
- * *Borrar* marca `deleted_at`: la fila sigue ahí y el sitio deja de mostrarla.
- * Es lo que hace el sitio y lo que casi siempre se quiere decir. *Eliminar*
- * borra la fila de verdad, con todo lo que el esquema cascadea detrás, y no
- * tiene vuelta atrás — por eso pide escribir algo a mano antes.
+ * *Archivar* marca `deleted_at`: la fila sigue ahí y el sitio deja de
+ * mostrarla. Es lo que hace el sitio y lo que casi siempre se quiere decir.
+ * *Eliminar* borra la fila de verdad, con todo lo que el esquema cascadea
+ * detrás, y no tiene vuelta atrás — por eso el modal dice qué se lleva antes
+ * de preguntar.
  *
- * Es un componente de servidor: las acciones no devuelven estado, van directo
- * al `action` del formulario, y lo único que necesita del navegador es el
- * `confirm()` del botón.
+ * Se llamaba "borrar", que a un botón de distancia de "eliminar" no decía cuál
+ * de las dos era la que no tiene vuelta.
+ *
+ * Es un componente de servidor: las acciones no devuelven estado y van directo
+ * al `action` del formulario. Lo único que viene del navegador es el modal que
+ * abre `ConfirmSubmit` antes de enviarlo.
  */
 
 export function DangerZone({
   id,
   deleted,
-  /** Lo que hay que escribir para eliminar: el correo, o la palabra ELIMINAR. */
-  confirmation,
   what,
   cascade,
   onDelete,
@@ -26,7 +28,6 @@ export function DangerZone({
 }: {
   id: number;
   deleted: boolean;
-  confirmation: string;
   what: string;
   cascade: string;
   onDelete: (formData: FormData) => Promise<void>;
@@ -39,8 +40,8 @@ export function DangerZone({
       title="Zona de riesgo"
       description={
         deleted
-          ? `${what} está borrada: no aparece en el sitio, pero sigue en la base.`
-          : `Borrar la saca del sitio sin perder nada. Se puede restaurar.`
+          ? `${what} está archivada: no aparece en el sitio, pero sigue en la base.`
+          : `Archivar la saca del sitio sin perder nada. Se puede restaurar.`
       }
     >
       <div className="grid gap-5">
@@ -49,12 +50,15 @@ export function DangerZone({
           <ConfirmSubmit
             tone="plain"
             question={
+              deleted ? `¿Restaurar ${what.toLowerCase()}?` : `¿Archivar ${what.toLowerCase()}?`
+            }
+            detail={
               deleted
-                ? `¿Restaurar ${what.toLowerCase()}?`
-                : `¿Borrar ${what.toLowerCase()}? Se puede deshacer.`
+                ? "Vuelve a aparecer en el sitio."
+                : "Sale del sitio pero sigue en la base: se puede restaurar."
             }
           >
-            {deleted ? "Restaurar" : "Borrar"}
+            {deleted ? "Restaurar" : "Archivar"}
           </ConfirmSubmit>
         </form>
 
@@ -62,16 +66,12 @@ export function DangerZone({
           <input type="hidden" name="id" value={id} />
           <p className="text-[13px] text-coral-ink">
             Eliminar definitivamente borra la fila y, con ella, {cascade}. No tiene vuelta atrás.
-            Escribe <code className="font-bold">{confirmation}</code> para confirmar.
           </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              name="confirm"
-              placeholder={confirmation}
-              autoComplete="off"
-              className="rounded-sm border border-[#e2a19c] bg-white px-2 py-1.5 text-[13px]"
-            />
-            <ConfirmSubmit question={`Esto no se puede deshacer. ¿Eliminar ${what.toLowerCase()}?`}>
+          <div>
+            <ConfirmSubmit
+              question={`¿Eliminar ${what.toLowerCase()} definitivamente?`}
+              detail={`Se borra la fila de la base, y con ella ${cascade}. No tiene vuelta atrás.`}
+            >
               Eliminar definitivamente
             </ConfirmSubmit>
           </div>

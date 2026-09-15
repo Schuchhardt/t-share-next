@@ -27,11 +27,10 @@ export async function adminSignIn(
   _prev: AdminAuthState,
   formData: FormData,
 ): Promise<AdminAuthState> {
+  // Lo mismo que muestra la pantalla cuando llega sin llave configurada: que
+  // el panel no está, sin decir qué le falta al entorno para estarlo.
   if (!hasAdminConfig()) {
-    return {
-      error:
-        "El panel no está habilitado en este entorno: falta ADMIN_KEY en las variables de entorno.",
-    };
+    return { error: "El panel no está disponible en este entorno." };
   }
 
   const given = String(formData.get("key") ?? "");

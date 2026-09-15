@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { backToList, selectedIds } from "@/lib/admin/bulk";
 import { requireAdmin } from "@/lib/admin/session";
 import { done, failed, type AdminState } from "@/lib/admin/state";
 import { hashPassword } from "@/lib/auth/password";
@@ -231,27 +232,14 @@ export async function restoreUser(formData: FormData): Promise<void> {
  * Borra la fila de verdad, con todo lo que cuelga de ella.
  *
  * El esquema cascadea desde `tshare_users`: las actividades de esa persona,
- * sus comentarios, sus guardados y sus descargas se van con ella. Por eso el
- * formulario pide escribir el correo entero antes de dejar apretar el botón, y
- * por eso esto lo comprueba otra vez.
+ * sus comentarios, sus guardados y sus descargas se van con ella. Lo único que
+ * hay entre el botón y eso es el modal, que lo dice con el número de
+ * actividades delante — la única defensa de verdad es `requireAdmin`.
  */
 export async function purgeUser(formData: FormData): Promise<void> {
   await requireAdmin();
   const userId = Number(formData.get("id"));
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Usuario inválido.");
-
-  const confirmation = String(formData.get("confirm") ?? "").trim().toLowerCase();
-  const { data, error: readError } = await db()
-    .from(T.users)
-    .select("email")
-    .eq("id", userId)
-    .maybeSingle();
-  if (readError) throw new Error(`purge user: ${readError.message}`);
-  if (!data) throw new Error("Esa cuenta ya no existe.");
-
-  if (confirmation !== (data as { email: string }).email.toLowerCase()) {
-    redirect(`/admin/usuarios/${userId}?estado=confirmacion`);
-  }
 
   const { error } = await db().from(T.users).delete().eq("id", userId);
   if (error) throw new Error(`purge user: ${error.message}`);
@@ -259,4 +247,61 @@ export async function purgeUser(formData: FormData): Promise<void> {
   revalidatePath("/admin/usuarios");
   revalidatePath("/actividades");
   redirect("/admin/usuarios?estado=eliminada");
+}
+
+// ---------------------------------------------------------------------------
+// Lo mismo, sobre lo que venga marcado en la lista
+// ---------------------------------------------------------------------------
+
+/**
+ * Archivar, restaurar y eliminar varias cuentas de una vez.
+ *
+ * Eliminar cascadea: cada cuenta se lleva lo que publicó. El modal lo dice
+ * antes — con el nombre y el número de actividades cuando es una fila, y con
+ * cuántas son cuando es la selección entera.
+ */
+
+const USERS = "/admin/usuarios";
+
+export async function archiveUsers(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const ids = selectedIds(formData);
+  if (ids.length === 0) redirect(backToList(formData, USERS, "ninguna", 0));
+
+  const { error } = await db()
+    .from(T.users)
+    .update({ deleted_at: new Date().toISOString(), is_active: false })
+    .in("id", ids);
+  if (error) throw new Error(`archive users: ${error.message}`);
+
+  revalidatePath(USERS);
+  redirect(backToList(formData, USERS, "archivadas", ids.length));
+}
+
+export async function restoreUsers(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const ids = selectedIds(formData);
+  if (ids.length === 0) redirect(backToList(formData, USERS, "ninguna", 0));
+
+  const { error } = await db()
+    .from(T.users)
+    .update({ deleted_at: null, is_active: true })
+    .in("id", ids);
+  if (error) throw new Error(`restore users: ${error.message}`);
+
+  revalidatePath(USERS);
+  redirect(backToList(formData, USERS, "restauradas", ids.length));
+}
+
+export async function purgeUsers(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const ids = selectedIds(formData);
+  if (ids.length === 0) redirect(backToList(formData, USERS, "ninguna", 0));
+
+  const { error } = await db().from(T.users).delete().in("id", ids);
+  if (error) throw new Error(`purge users: ${error.message}`);
+
+  revalidatePath(USERS);
+  revalidatePath("/actividades");
+  redirect(backToList(formData, USERS, "eliminadas", ids.length));
 }

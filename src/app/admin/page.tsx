@@ -30,7 +30,7 @@ function Card({
       <span className="eyebrow">{title}</span>
       <p className="mt-2 text-[32px] leading-none font-bold text-ink">{live}</p>
       <p className="mt-2 text-[13px] text-muted">
-        {deleted > 0 ? `${deleted} borrada${deleted === 1 ? "" : "s"}` : "ninguna borrada"}
+        {deleted > 0 ? `${deleted} archivada${deleted === 1 ? "" : "s"}` : "ninguna archivada"}
       </p>
     </Link>
   );

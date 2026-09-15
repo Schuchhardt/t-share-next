@@ -1,14 +1,16 @@
 import type { Route } from "next";
 import Link from "next/link";
-import { AdminPager, AdminSearch, StateNotice } from "@/components/admin/list-tools";
+import { BulkTable, type BulkRow } from "@/components/admin/bulk-table";
+import { AdminPager, AdminSearch, BulkNotice, StateNotice } from "@/components/admin/list-tools";
 import { listUsers } from "@/lib/admin/users";
+import { archiveUsers, purgeUsers, restoreUsers } from "@/lib/admin/user-actions";
 import { formatDate } from "@/lib/format";
 
 /**
  * Las cuentas.
  *
  * La lista vive en la URL: `?q=`, `?page=` y `?estado=borradas`. Las cuentas
- * borradas no salen por defecto — son las que el sitio ya no muestra — y se
+ * archivadas no salen por defecto — son las que el sitio ya no muestra — y se
  * piden marcando la casilla.
  */
 
@@ -31,6 +33,33 @@ export default async function AdminUsuariosPage({ searchParams }: PageProps<"/ad
     return (qs ? `/admin/usuarios?${qs}` : "/admin/usuarios") as Route;
   };
 
+  const rows: BulkRow[] = results.items.map((user) => ({
+    id: user.id,
+    // Con el número de actividades delante: es lo que se lleva un eliminado.
+    name:
+      user.activityCount > 0
+        ? `${user.name} (${user.activityCount} ${user.activityCount === 1 ? "actividad" : "actividades"})`
+        : user.name,
+    archived: user.deletedAt !== null,
+    cells: [
+      <div key="cuenta">
+        <Link href={`/admin/usuarios/${user.id}`} className="font-semibold">
+          {user.name}
+        </Link>
+        <span className="block text-xs text-muted">{user.email}</span>
+      </div>,
+      <span key="estado" className="text-xs text-muted">
+        {user.deletedAt ? "Archivada" : user.isActive ? "Activa" : "Inactiva"}
+        {user.mustChangePassword && <span className="block">Debe cambiar clave</span>}
+      </span>,
+      user.activityCount,
+      <span key="acceso" className="text-xs whitespace-nowrap text-muted">
+        {user.lastLoginAt ? formatDate(user.lastLoginAt) : "Nunca"}
+      </span>,
+      <span key="alta" className="text-xs whitespace-nowrap text-muted">{formatDate(user.createdAt)}</span>,
+    ],
+  }));
+
   return (
     <>
       <div className="mb-5 flex flex-wrap items-baseline justify-between gap-3">
@@ -44,6 +73,12 @@ export default async function AdminUsuariosPage({ searchParams }: PageProps<"/ad
       </div>
 
       <StateNotice state={typeof sp.estado === "string" && sp.estado !== "borradas" ? sp.estado : undefined} />
+      <BulkNotice
+        result={typeof sp.lote === "string" ? sp.lote : undefined}
+        count={Number(typeof sp.n === "string" ? sp.n : 0) || 0}
+        one="cuenta"
+        many="cuentas"
+      />
 
       <AdminSearch action="/admin/usuarios" defaultValue={q} placeholder="Correo, nombre o apellido">
         <label className="flex items-center gap-2 text-sm text-muted">
@@ -54,48 +89,22 @@ export default async function AdminUsuariosPage({ searchParams }: PageProps<"/ad
             defaultChecked={onlyDeleted}
             className="size-4 accent-[var(--color-indigo)]"
           />
-          Sólo borradas
+          Sólo archivadas
         </label>
       </AdminSearch>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-ink text-left">
-              <th className="py-2 pr-3 font-bold">Cuenta</th>
-              <th className="py-2 pr-3 font-bold">Estado</th>
-              <th className="py-2 pr-3 font-bold">Actividades</th>
-              <th className="py-2 pr-3 font-bold">Último acceso</th>
-              <th className="py-2 font-bold">Alta</th>
-            </tr>
-          </thead>
-          <tbody>
-            {results.items.map((user) => (
-              <tr key={user.id} className="border-b border-line hover:bg-row-hover">
-                <td className="py-2.5 pr-3">
-                  <Link href={`/admin/usuarios/${user.id}`} className="font-semibold">
-                    {user.name}
-                  </Link>
-                  <span className="block text-xs text-muted">{user.email}</span>
-                </td>
-                <td className="py-2.5 pr-3 text-xs text-muted">
-                  {user.deletedAt ? "Borrada" : user.isActive ? "Activa" : "Inactiva"}
-                  {user.mustChangePassword && <span className="block">Debe cambiar clave</span>}
-                </td>
-                <td className="py-2.5 pr-3">{user.activityCount}</td>
-                <td className="py-2.5 pr-3 text-xs text-muted">
-                  {user.lastLoginAt ? formatDate(user.lastLoginAt) : "Nunca"}
-                </td>
-                <td className="py-2.5 text-xs text-muted">{formatDate(user.createdAt)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {results.items.length === 0 && (
-        <p className="py-8 text-sm text-muted">No hay cuentas con esa búsqueda.</p>
-      )}
+      <BulkTable
+        headers={["Cuenta", "Estado", "Actividades", "Último acceso", "Alta"]}
+        rows={rows}
+        back={hrefFor(page)}
+        one="cuenta"
+        many="cuentas"
+        cascade="todo lo que publicaron: sus actividades, comentarios y guardados"
+        empty="No hay cuentas con esa búsqueda."
+        onArchive={archiveUsers}
+        onRestore={restoreUsers}
+        onPurge={purgeUsers}
+      />
 
       <AdminPager
         page={results.page}

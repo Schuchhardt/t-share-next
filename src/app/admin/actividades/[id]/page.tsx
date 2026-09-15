@@ -52,7 +52,7 @@ export default async function AdminActividadPage({
         #{activity.id} · {formatDate(activity.createdAt)} · {activity.downloadCount} descargas ·{" "}
         {activity.savedCount} guardados ·{" "}
         {activity.deletedAt ? (
-          <span className="text-coral-ink">borrada</span>
+          <span className="text-coral-ink">archivada</span>
         ) : (
           <Link href={`/actividades/detalle/${activity.id}`}>ver en el sitio</Link>
         )}
@@ -82,7 +82,6 @@ export default async function AdminActividadPage({
         <DangerZone
           id={activity.id}
           deleted={Boolean(activity.deletedAt)}
-          confirmation="ELIMINAR"
           what="La actividad"
           cascade="sus documentos, sus comentarios y sus guardados (los archivos quedan en el bucket)"
           onDelete={deleteAdminActivity}

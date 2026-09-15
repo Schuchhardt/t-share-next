@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { backToList, selectedIds } from "@/lib/admin/bulk";
 import { requireAdmin } from "@/lib/admin/session";
 import { findUserIdByEmail } from "@/lib/admin/users";
 import { ensureSubjectGrade } from "@/lib/catalog";
@@ -428,16 +429,13 @@ export async function restoreAdminActivity(formData: FormData): Promise<void> {
  *
  * Los objetos de S3 no se tocan: quedan huérfanos en el bucket y desde
  * /admin/archivos se pueden borrar a mano. Es a propósito — una actividad
- * eliminada por error se puede volver a armar si los archivos siguen ahí.
+ * eliminada por error se puede volver a armar si los archivos siguen ahí, que
+ * es lo más parecido a deshacer que hay.
  */
 export async function purgeAdminActivity(formData: FormData): Promise<void> {
   await requireAdmin();
   const activityId = Number(formData.get("id"));
   if (!Number.isInteger(activityId) || activityId <= 0) throw new Error("Actividad inválida.");
-
-  if (String(formData.get("confirm") ?? "").trim().toUpperCase() !== "ELIMINAR") {
-    redirect(`/admin/actividades/${activityId}?estado=confirmacion`);
-  }
 
   const { error } = await db().from(T.activities).delete().eq("id", activityId);
   if (error) throw new Error(`purge activity: ${error.message}`);
@@ -445,4 +443,64 @@ export async function purgeAdminActivity(formData: FormData): Promise<void> {
   revalidatePath("/admin/actividades");
   revalidatePath("/actividades");
   redirect("/admin/actividades?estado=eliminada");
+}
+
+// ---------------------------------------------------------------------------
+// Lo mismo, sobre lo que venga marcado en la lista
+// ---------------------------------------------------------------------------
+
+/**
+ * Archivar, restaurar y eliminar sobre varias filas de una vez.
+ *
+ * Son las mismas tres operaciones de la ficha, con dos diferencias que vienen
+ * de dónde se disparan. Una: los ids llegan del formulario de la lista — las
+ * casillas marcadas, o el botón de una fila, que manda sólo la suya — así que
+ * cada una es un `.in("id", ids)` y no un `.eq`. Dos: al terminar vuelven a la
+ * lista tal como estaba, con su búsqueda y su página, en vez de a la ficha de
+ * algo que quizá ya no existe.
+ */
+
+const ACTIVITIES = "/admin/actividades";
+
+export async function archiveAdminActivities(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const ids = selectedIds(formData);
+  if (ids.length === 0) redirect(backToList(formData, ACTIVITIES, "ninguna", 0));
+
+  const { error } = await db()
+    .from(T.activities)
+    .update({ deleted_at: new Date().toISOString() })
+    .in("id", ids);
+  if (error) throw new Error(`archive activities: ${error.message}`);
+
+  revalidatePath(ACTIVITIES);
+  revalidatePath("/actividades");
+  redirect(backToList(formData, ACTIVITIES, "archivadas", ids.length));
+}
+
+export async function restoreAdminActivities(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const ids = selectedIds(formData);
+  if (ids.length === 0) redirect(backToList(formData, ACTIVITIES, "ninguna", 0));
+
+  const { error } = await db().from(T.activities).update({ deleted_at: null }).in("id", ids);
+  if (error) throw new Error(`restore activities: ${error.message}`);
+
+  revalidatePath(ACTIVITIES);
+  revalidatePath("/actividades");
+  redirect(backToList(formData, ACTIVITIES, "restauradas", ids.length));
+}
+
+/** Se lleva las filas de verdad. Los objetos de S3 quedan, igual que en la ficha. */
+export async function purgeAdminActivities(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const ids = selectedIds(formData);
+  if (ids.length === 0) redirect(backToList(formData, ACTIVITIES, "ninguna", 0));
+
+  const { error } = await db().from(T.activities).delete().in("id", ids);
+  if (error) throw new Error(`purge activities: ${error.message}`);
+
+  revalidatePath(ACTIVITIES);
+  revalidatePath("/actividades");
+  redirect(backToList(formData, ACTIVITIES, "eliminadas", ids.length));
 }

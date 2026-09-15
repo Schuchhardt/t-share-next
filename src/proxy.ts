@@ -86,7 +86,7 @@ export default async function proxy(request: NextRequest) {
 /**
  * El panel. Sin `ADMIN_KEY` en el entorno `verifyAdminToken` devuelve null
  * siempre, así que todo `/admin` termina en la pantalla de la llave y esa
- * pantalla dice que no está habilitado: quitar la variable apaga el panel.
+ * pantalla dice que no está disponible: quitar la variable apaga el panel.
  */
 async function adminProxy(request: NextRequest, pathname: string, search: string) {
   const admin = await verifyAdminToken(request.cookies.get(ADMIN_COOKIE)?.value);

@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ActivityRow } from "@/components/activity-row";
 import { DocumentList, describe as describeDoc } from "@/components/document-list";
 import { FileDropzone, formatSize, sameFile } from "@/components/file-dropzone";
+import { ConfirmSubmit } from "@/components/admin/ui";
 import { ImagePicker } from "@/components/image-picker";
 import { StarRating, StarRatingInput } from "@/components/star-rating";
 import type { ActivityDocument, ActivitySummary } from "@/lib/types";
@@ -438,6 +439,71 @@ describe("StarRatingInput", () => {
 
     expect(lit()).toBe(0);
     expect(screen.getAllByRole("radio").some((r) => (r as HTMLInputElement).checked)).toBe(false);
+  });
+});
+
+describe("ConfirmSubmit", () => {
+  /**
+   * El modal es la única pregunta que queda antes de un borrado definitivo —
+   * ya no hay que escribir ninguna palabra — así que lo que se prueba acá es
+   * que no se pueda enviar sin pasar por él, y que cancelar no envíe nada.
+   */
+  function ask(onSubmit: () => void) {
+    return render(
+      <form action={onSubmit}>
+        <ConfirmSubmit question="¿Eliminar «El post-it positivo»?" detail="No tiene vuelta atrás.">
+          Eliminar
+        </ConfirmSubmit>
+      </form>,
+    );
+  }
+
+  it("pregunta en vez de enviar, y dice qué se lleva", async () => {
+    const user = userEvent.setup();
+    const submitted = vi.fn();
+    ask(submitted);
+
+    await user.click(screen.getByRole("button", { name: "Eliminar" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("¿Eliminar «El post-it positivo»?");
+    expect(dialog).toHaveTextContent("No tiene vuelta atrás.");
+    expect(submitted).not.toHaveBeenCalled();
+  });
+
+  /** Apretar Enter sin leer no puede borrar nada. */
+  it("deja el foco en Cancelar", async () => {
+    const user = userEvent.setup();
+    ask(vi.fn());
+
+    await user.click(screen.getByRole("button", { name: "Eliminar" }));
+    expect(screen.getByRole("button", { name: "Cancelar" })).toHaveFocus();
+  });
+
+  it("cancelar cierra sin enviar", async () => {
+    const user = userEvent.setup();
+    const submitted = vi.fn();
+    ask(submitted);
+
+    await user.click(screen.getByRole("button", { name: "Eliminar" }));
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(submitted).not.toHaveBeenCalled();
+  });
+
+  it("confirmar envía el formulario una vez", async () => {
+    const user = userEvent.setup();
+    const submitted = vi.fn();
+    ask(submitted);
+
+    await user.click(screen.getByRole("button", { name: "Eliminar" }));
+    // El del modal, no el de la página: los dos se llaman igual a propósito.
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Eliminar" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(submitted).toHaveBeenCalledTimes(1);
   });
 });
 

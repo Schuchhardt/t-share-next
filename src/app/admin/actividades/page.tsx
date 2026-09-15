@@ -1,14 +1,23 @@
 import type { Route } from "next";
 import Link from "next/link";
-import { AdminPager, AdminSearch, StateNotice } from "@/components/admin/list-tools";
+import { BulkTable, type BulkRow } from "@/components/admin/bulk-table";
+import { AdminPager, AdminSearch, BulkNotice, StateNotice } from "@/components/admin/list-tools";
 import { listActivities } from "@/lib/admin/activities";
+import {
+  archiveAdminActivities,
+  purgeAdminActivities,
+  restoreAdminActivities,
+} from "@/lib/admin/activity-actions";
 import { formatDate } from "@/lib/format";
 
 /**
  * Las actividades, incluidas las que el sitio ya no muestra.
  *
- * Igual que la lista de cuentas: el estado vive en la URL y las borradas se
+ * Igual que la lista de cuentas: el estado vive en la URL y las archivadas se
  * piden aparte, porque son justamente las que no hay que ver todos los días.
+ *
+ * La tabla la dibuja `BulkTable`, que es cliente: acá se arman las celdas y se
+ * le pasan ya hechas, junto con las tres acciones que puede disparar.
  */
 
 export const metadata = { title: "Actividades" };
@@ -32,6 +41,30 @@ export default async function AdminActividadesPage({
     return (qs ? `/admin/actividades?${qs}` : "/admin/actividades") as Route;
   };
 
+  const rows: BulkRow[] = results.items.map((activity) => ({
+    id: activity.id,
+    name: `«${activity.title}»`,
+    archived: activity.deletedAt !== null,
+    cells: [
+      <div key="titulo">
+        <Link href={`/admin/actividades/${activity.id}`} className="font-semibold">
+          {activity.title}
+        </Link>
+        {activity.deletedAt && <span className="block text-xs text-coral-ink">archivada</span>}
+      </div>,
+      <span key="autor" className="text-xs text-muted">
+        {activity.authorId ? (
+          <Link href={`/admin/usuarios/${activity.authorId}`}>{activity.authorName}</Link>
+        ) : (
+          activity.authorName
+        )}
+      </span>,
+      activity.documentCount,
+      activity.downloadCount,
+      <span key="alta" className="text-xs whitespace-nowrap text-muted">{formatDate(activity.createdAt)}</span>,
+    ],
+  }));
+
   return (
     <>
       <div className="mb-5 flex flex-wrap items-baseline justify-between gap-3">
@@ -47,6 +80,12 @@ export default async function AdminActividadesPage({
       <StateNotice
         state={typeof sp.estado === "string" && sp.estado !== "borradas" ? sp.estado : undefined}
       />
+      <BulkNotice
+        result={typeof sp.lote === "string" ? sp.lote : undefined}
+        count={Number(typeof sp.n === "string" ? sp.n : 0) || 0}
+        one="actividad"
+        many="actividades"
+      />
 
       <AdminSearch
         action="/admin/actividades"
@@ -61,51 +100,22 @@ export default async function AdminActividadesPage({
             defaultChecked={onlyDeleted}
             className="size-4 accent-[var(--color-indigo)]"
           />
-          Sólo borradas
+          Sólo archivadas
         </label>
       </AdminSearch>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-ink text-left">
-              <th className="py-2 pr-3 font-bold">Actividad</th>
-              <th className="py-2 pr-3 font-bold">Autor</th>
-              <th className="py-2 pr-3 font-bold">Docs</th>
-              <th className="py-2 pr-3 font-bold">Descargas</th>
-              <th className="py-2 font-bold">Publicada</th>
-            </tr>
-          </thead>
-          <tbody>
-            {results.items.map((activity) => (
-              <tr key={activity.id} className="border-b border-line hover:bg-row-hover">
-                <td className="py-2.5 pr-3">
-                  <Link href={`/admin/actividades/${activity.id}`} className="font-semibold">
-                    {activity.title}
-                  </Link>
-                  {activity.deletedAt && (
-                    <span className="block text-xs text-coral-ink">borrada</span>
-                  )}
-                </td>
-                <td className="py-2.5 pr-3 text-xs text-muted">
-                  {activity.authorId ? (
-                    <Link href={`/admin/usuarios/${activity.authorId}`}>{activity.authorName}</Link>
-                  ) : (
-                    activity.authorName
-                  )}
-                </td>
-                <td className="py-2.5 pr-3">{activity.documentCount}</td>
-                <td className="py-2.5 pr-3">{activity.downloadCount}</td>
-                <td className="py-2.5 text-xs text-muted">{formatDate(activity.createdAt)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {results.items.length === 0 && (
-        <p className="py-8 text-sm text-muted">No hay actividades con esa búsqueda.</p>
-      )}
+      <BulkTable
+        headers={["Actividad", "Autor", "Docs", "Descargas", "Publicada"]}
+        rows={rows}
+        back={hrefFor(page)}
+        one="actividad"
+        many="actividades"
+        cascade="sus documentos, comentarios y guardados"
+        empty="No hay actividades con esa búsqueda."
+        onArchive={archiveAdminActivities}
+        onRestore={restoreAdminActivities}
+        onPurge={purgeAdminActivities}
+      />
 
       <AdminPager
         page={results.page}

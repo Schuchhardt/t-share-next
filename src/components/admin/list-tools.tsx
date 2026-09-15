@@ -70,24 +70,63 @@ export function AdminPager({
   );
 }
 
-/** El aviso que dejan las acciones al redirigir con `?estado=`. */
+/** El aviso que dejan las acciones de la ficha al redirigir con `?estado=`. */
 export function StateNotice({ state }: { state: string | undefined }) {
   const messages: Record<string, string> = {
-    borrada: "Listo, quedó borrada. Sigue en la base y se puede restaurar.",
+    borrada: "Listo, quedó archivada. Sigue en la base y se puede restaurar.",
     restaurada: "Listo, quedó restaurada.",
     eliminada: "Eliminada definitivamente.",
-    confirmacion: "No se eliminó: la confirmación que escribiste no coincide.",
   };
   const message = state ? messages[state] : undefined;
   if (!message) return null;
 
+  return <Notice bad={false}>{message}</Notice>;
+}
+
+/**
+ * El aviso de una acción en lote, que deja `?lote=` y `?n=` al volver.
+ *
+ * Dice cuántas, porque es lo único que quien apretó el botón no sabe: puede
+ * haber marcado veinte y haber acertado con diecinueve.
+ */
+export function BulkNotice({
+  result,
+  count,
+  one,
+  many,
+}: {
+  result: string | undefined;
+  count: number;
+  one: string;
+  many: string;
+}) {
+  if (!result) return null;
+
+  const what = `${count} ${count === 1 ? one : many}`;
+  const verb = count === 1 ? "quedó" : "quedaron";
+  const messages: Record<string, string> = {
+    archivadas:
+      `Listo: ${what} ${verb} fuera del sitio. ` +
+      `${count === 1 ? "Sigue" : "Siguen"} en la base y se ${count === 1 ? "puede" : "pueden"} restaurar.`,
+    restauradas: `Listo: ${what} ${verb} de vuelta.`,
+    eliminadas: `${what} ${count === 1 ? "eliminada" : "eliminadas"} definitivamente.`,
+    ninguna: "No marcaste ninguna fila.",
+  };
+  const message = messages[result];
+  if (!message) return null;
+
+  return <Notice bad={result === "ninguna"}>{message}</Notice>;
+}
+
+function Notice({ bad, children }: { bad: boolean; children: React.ReactNode }) {
   return (
     <p
+      aria-live="polite"
       className={`mb-5 rounded-sm px-3 py-2 text-sm ${
-        state === "confirmacion" ? "bg-[#fdecea] text-coral-ink" : "bg-mint text-mint-strong"
+        bad ? "bg-[#fdecea] text-coral-ink" : "bg-mint text-mint-strong"
       }`}
     >
-      {message}
+      {children}
     </p>
   );
 }

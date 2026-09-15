@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 /**
@@ -184,18 +185,21 @@ export function Submit({
   pendingLabel,
   tone = "primary",
   formAction,
+  disabled,
 }: {
   children: React.ReactNode;
   pendingLabel?: string;
   tone?: ButtonTone;
   formAction?: (formData: FormData) => void | Promise<void>;
+  /** Para un botón que todavía no tiene sobre qué actuar. */
+  disabled?: boolean;
 }) {
   const { pending } = useFormStatus();
   return (
     <button
       type="submit"
       formAction={formAction}
-      disabled={pending}
+      disabled={pending || disabled}
       className={`rounded-sm px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${TONES[tone]}`}
     >
       {pending ? (pendingLabel ?? "Guardando…") : children}
@@ -203,28 +207,146 @@ export function Submit({
   );
 }
 
-/** Un botón que pregunta antes. Para lo que no tiene vuelta atrás. */
+/**
+ * Un botón que pregunta antes, en un modal. Para lo que no tiene vuelta atrás.
+ *
+ * Era un `window.confirm`, que el navegador dibuja arriba del todo, sin formato
+ * y sin sitio donde poner lo que la acción se lleva por delante — y en algunos
+ * navegadores se puede silenciar para el resto de la sesión, que es la peor
+ * forma posible de perder la única pregunta antes de un borrado.
+ *
+ * El modal es un `<dialog>` nativo: trae la trampa de foco, el fondo y la
+ * tecla Escape puestos. El foco entra en "Cancelar" — apretar Enter sin leer
+ * no borra nada.
+ *
+ * Al confirmar no se llama a la acción a mano: se envía el formulario con este
+ * botón como emisor (`requestSubmit`), que es lo que hace que React use el
+ * `formAction` de este botón y no el del formulario. Es lo que permite que la
+ * barra de selección tenga tres botones, cada uno con lo suyo, en un solo
+ * formulario.
+ */
 export function ConfirmSubmit({
   children,
   question,
+  detail,
   tone = "danger",
+  formAction,
+  disabled,
+  compact,
 }: {
   children: React.ReactNode;
+  /** La pregunta, que nombra sobre qué se actúa. */
   question: string;
+  /** Lo que hay que saber antes de decir que sí: qué se lleva, si se deshace. */
+  detail?: string;
   tone?: ButtonTone;
+  formAction?: (formData: FormData) => void | Promise<void>;
+  disabled?: boolean;
+  /** Del tamaño de una fila de tabla, no de un formulario. */
+  compact?: boolean;
 }) {
   const { pending } = useFormStatus();
+  const trigger = useRef<HTMLButtonElement>(null);
+  const [asking, setAsking] = useState(false);
+
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      onClick={(event) => {
-        if (!window.confirm(question)) event.preventDefault();
+    <>
+      <button
+        ref={trigger}
+        type="submit"
+        formAction={formAction}
+        disabled={pending || disabled}
+        onClick={(event) => {
+          // El envío lo hace el modal, si dicen que sí.
+          event.preventDefault();
+          setAsking(true);
+        }}
+        className={`rounded-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+          compact ? "px-2 py-1 text-xs" : "px-4 py-2 text-sm"
+        } ${TONES[tone]}`}
+      >
+        {pending ? "…" : children}
+      </button>
+
+      {asking && (
+        <ConfirmDialog
+          question={question}
+          detail={detail}
+          confirmLabel={children}
+          tone={tone}
+          onCancel={() => setAsking(false)}
+          onConfirm={() => {
+            setAsking(false);
+            const button = trigger.current;
+            button?.form?.requestSubmit(button);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function ConfirmDialog({
+  question,
+  detail,
+  confirmLabel,
+  tone,
+  onCancel,
+  onConfirm,
+}: {
+  question: string;
+  detail?: string;
+  confirmLabel: React.ReactNode;
+  tone: ButtonTone;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = ref.current;
+    // `showModal` sobre un diálogo ya abierto tira: en desarrollo React monta
+    // el efecto dos veces a propósito.
+    if (dialog && !dialog.open) dialog.showModal();
+  }, []);
+
+  return (
+    <dialog
+      ref={ref}
+      // Escape. Dejar correr el suyo cerraría el elemento por debajo de React;
+      // desmontarlo es el mismo resultado y deja una sola salida.
+      onCancel={(event) => {
+        event.preventDefault();
+        onCancel();
       }}
-      className={`rounded-sm px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${TONES[tone]}`}
+      onClick={(event) => {
+        // El propio elemento es el fondo alrededor del recuadro.
+        if (event.target === ref.current) onCancel();
+      }}
+      className="m-auto w-[min(420px,92vw)] max-w-none rounded-md border border-line bg-white p-0 backdrop:bg-ink/60"
     >
-      {pending ? "…" : children}
-    </button>
+      <div className="grid gap-2 p-5">
+        <h2 className="text-[15px] font-bold text-pretty text-ink">{question}</h2>
+        {detail && <p className="text-[13px] leading-[1.5] text-pretty text-muted">{detail}</p>}
+      </div>
+      <div className="flex justify-end gap-2 border-t border-line px-5 py-3">
+        <button
+          type="button"
+          autoFocus
+          onClick={onCancel}
+          className={`rounded-sm px-4 py-2 text-sm font-semibold transition-colors ${TONES.plain}`}
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          className={`rounded-sm px-4 py-2 text-sm font-semibold transition-colors ${TONES[tone]}`}
+        >
+          {confirmLabel}
+        </button>
+      </div>
+    </dialog>
   );
 }
 
