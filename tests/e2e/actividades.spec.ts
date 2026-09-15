@@ -1,4 +1,4 @@
-import { E2E, expect, requiresDatabase, signIn, test } from "./fixtures";
+import { E2E, clickAndSettle, expect, requiresDatabase, signIn, test } from "./fixtures";
 
 /**
  * What a signed-in teacher can do: save an activity, comment on it, and
@@ -28,11 +28,11 @@ test("saving an activity sticks, and shows up on the profile", async ({ page }) 
   const save = page.getByRole("button", { name: /Guardar|Guardada/ });
   const wasSaved = (await save.getAttribute("aria-pressed")) === "true";
   if (wasSaved) {
-    await save.click();
+    await clickAndSettle(page, save);
     await expect(save).toHaveAttribute("aria-pressed", "false");
   }
 
-  await save.click();
+  await clickAndSettle(page, save);
   await expect(page.getByRole("button", { name: "Guardada ✓" })).toBeVisible();
 
   // It survives a reload, so it lives in the database rather than in the tab.

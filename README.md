@@ -160,6 +160,38 @@ this bucket`). El día que se pueda configurar, en *S3 → el bucket → Permiss
 ]
 ```
 
+## Mudar el proyecto Supabase
+
+`npm run db:clone` copia las tablas `tshare_*` a un proyecto nuevo. El origen
+son las variables de siempre; el destino, `NEW_SUPABASE_URL` y
+`NEW_SUPABASE_SERVICE_ROLE`. Mueve filas, nunca DDL: hay que aplicarle
+`db/schema.sql` al destino antes de cargar.
+
+```bash
+npm run db:clone -- --dump     # lee el origen a db/.clone/*.ndjson
+npm run db:clone -- --load     # las escribe en el destino
+npm run db:clone -- --verify   # compara los conteos de las dos puntas
+```
+
+Es idempotente —las filas se hacen *upsert* por su id—, así que repetirlo
+arregla una carga a medias en vez de duplicarla. Al terminar la carga
+recalcula los contadores de `tshare_activities`, que los triggers dejaron
+inflados al insertar guardados y descargas, y vuelve a sembrar las secuencias
+por sobre el id más alto de cada tabla.
+
+Nunca escribe en el origen, y los archivos no se tocan: viven en S3 y el bucket
+se queda donde está. El volcado en `db/.clone/` son filas de producción en
+claro; está en `.gitignore` y conviene borrarlo cuando la mudanza termine.
+
+Dos advertencias que se ganaron a pulso:
+
+- **Los conteos iguales no prueban que el contenido sea igual.** Un esquema
+  recién aplicado ordena las columnas distinto de uno que creció a punta de
+  `alter table`, así que comparar el JSON crudo da falsos positivos; hay que
+  normalizar las llaves antes de comparar.
+- **Las secuencias.** Si no quedan por sobre el id más alto, el primer insert
+  de la aplicación choca con una fila migrada.
+
 ## Contraseñas migradas
 
 Las cuentas traen el hash bcrypt de Laravel (`$2y$`). La aplicación lo acepta

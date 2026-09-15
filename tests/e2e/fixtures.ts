@@ -1,4 +1,4 @@
-import { expect, test as base, type Page } from "@playwright/test";
+import { expect, test as base, type Locator, type Page } from "@playwright/test";
 import { E2E } from "../../db/scripts/e2e-fixtures";
 
 /**
@@ -33,18 +33,23 @@ export async function signIn(page: Page, email: string, password: string) {
 }
 
 /**
- * Waits for the answer, not just for the header to change.
+ * Clicks, and waits for the server action behind it to answer.
  *
- * "Salir" posts a server action, and the `Set-Cookie` that expires the
- * session rides on its response. The re-rendered header can show "Entrar"
- * before the browser has processed that header, so asserting on the header
- * alone leaves the next `signIn` racing a session that is still in the jar —
- * which is what made this flake.
+ * Several controls here change before the server has agreed. The save button
+ * flips through `useOptimistic`, so "Guardada ✓" is on screen before the row
+ * exists; "Salir" re-renders the header signed-out while the `Set-Cookie` that
+ * expires the session is still in flight. Asserting on what the screen says
+ * and then reloading — or signing in again — races the write, which is what
+ * made both of those flake.
  */
-export async function signOut(page: Page) {
+export async function clickAndSettle(page: Page, target: Locator) {
   const answered = page.waitForResponse((r) => r.request().method() === "POST");
-  await page.getByRole("button", { name: "Salir" }).click();
+  await target.click();
   await answered;
+}
+
+export async function signOut(page: Page) {
+  await clickAndSettle(page, page.getByRole("button", { name: "Salir" }));
   await expect(page.getByRole("link", { name: "Entrar" })).toBeVisible();
 }
 

@@ -4,10 +4,14 @@
  *   npm run db:seed:e2e          # create or refresh them
  *   npm run db:seed:e2e -- --drop   # remove them
  *
- * The rows sit at ids from 900000 up, well clear of the migrated data, and are
+ * The rows sit at ids from 900000 up, above the migrated data, and are
  * upserted, so running this twice is the same as running it once. The teacher
  * it creates carries a Laravel-style `$2y$` hash on purpose: that is what the
  * forced-password-change test needs in order to be a real test.
+ *
+ * Being the highest ids in the table has a consequence worth knowing: once the
+ * sequences are re-seeded past them, every new row the app writes also lands
+ * above 900000. Nothing here may clean up by id range alone — see `dropE2E`.
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -59,8 +63,16 @@ export async function dropE2E(db: SupabaseClient = client()) {
     const { error } = await db.from(table).delete().in('id', ids);
     if (error) throw new Error(`drop ${table}: ${error.message}`);
   }
-  // Anything the tests created themselves.
-  const { error } = await db.from('tshare_activities').delete().gte('id', 900000);
+  // Anything the tests created themselves. Scoped to the fixture accounts, and
+  // that is not belt and braces: the identity sequence now issues ids *above*
+  // 900000, because the fixtures are the highest rows in the table. An id range
+  // on its own would take every activity a real teacher publishes from here on
+  // with it.
+  const { error } = await db
+    .from('tshare_activities')
+    .delete()
+    .gte('id', 900000)
+    .in('user_id', [E2E.legacyUser.id, E2E.modernUser.id, E2E.recoveryUser.id]);
   if (error) throw new Error(`drop stray activities: ${error.message}`);
 }
 
