@@ -48,6 +48,24 @@ export async function clickAndSettle(page: Page, target: Locator) {
   await answered;
 }
 
+/**
+ * El panel de administración corre con su propia llave y su propia cookie, así
+ * que entra por su propia puerta: no hay cuenta que buscar ni sesión de
+ * profesor que reutilizar.
+ */
+export function requiresAdminKey() {
+  test.skip(
+    !process.env.ADMIN_KEY,
+    "Needs ADMIN_KEY in .env.local — without it the panel is disabled on purpose.",
+  );
+}
+
+export async function adminSignIn(page: Page) {
+  await page.goto("/admin/entrar");
+  await page.getByLabel("Llave").fill(process.env.ADMIN_KEY ?? "");
+  await page.getByRole("button", { name: "Entrar" }).click();
+}
+
 export async function signOut(page: Page) {
   await clickAndSettle(page, page.getByRole("button", { name: "Salir" }));
   await expect(page.getByRole("link", { name: "Entrar" })).toBeVisible();

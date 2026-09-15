@@ -55,6 +55,15 @@ export const env = {
   get s3PublicBaseUrl(): string | null {
     return process.env.S3_PUBLIC_BASE_URL?.replace(/\/$/, "") ?? null;
   },
+  /**
+   * La llave del panel de administración (`/admin`). No hay cuenta ni correo
+   * detrás: quien la escribe entra, así que es un secreto de operación, no una
+   * credencial de persona. Es opcional a propósito — sin ella el panel no
+   * existe, que es lo que corresponde en un entorno donde nadie lo va a usar.
+   */
+  get adminKey(): string | null {
+    return process.env.ADMIN_KEY?.trim() || null;
+  },
   /** Resend, which is what sends every transactional mail. */
   get resendApiKey(): string {
     return required("RESEND_API_KEY");
@@ -98,6 +107,11 @@ export function hasStorageConfig(): boolean {
   return Boolean(
     process.env.S3_BUCKET && process.env.S3_ACCESS_KEY_ID && process.env.S3_SECRET_ACCESS_KEY,
   );
+}
+
+/** True when the admin panel is enabled in this environment. */
+export function hasAdminConfig(): boolean {
+  return Boolean(process.env.ADMIN_KEY?.trim());
 }
 
 /** True when mail can actually leave the machine. */

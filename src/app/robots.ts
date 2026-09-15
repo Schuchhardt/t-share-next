@@ -26,6 +26,9 @@ export default function robots(): MetadataRoute.Robots {
         "/recuperar-clave",
         "/cambiar-clave",
         "/cambiar-password",
+        // El panel de administración. Su layout ya manda `noindex, nofollow`;
+        // esto le ahorra a un crawler el viaje hasta descubrirlo.
+        "/admin",
       ],
     },
     sitemap: absoluteUrl("/sitemap.xml"),

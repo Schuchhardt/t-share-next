@@ -36,6 +36,11 @@
   /* Coral — saved state */
   --color-coral: #f2837b;
   --color-coral-ink: #3a1512;
+
+  /* Ámbar — las estrellas del puntaje. No viene del rediseño, que no dibuja
+     la calificación: un puntaje se lee amarillo en todas partes y la paleta
+     no traía un cálido. Las estrellas apagadas usan `--color-lav-border`. */
+  --color-star: #f2b01e;
 }
 
 @layer base {

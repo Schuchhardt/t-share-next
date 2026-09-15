@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth/session";
+import { ensureSubjectGrade } from "@/lib/catalog";
 import { notifyActivityCommented } from "@/lib/notifications";
 import { storedUrlFor } from "@/lib/storage";
 import { T, db, unwrap } from "@/lib/supabase";
@@ -230,33 +231,6 @@ async function readUploads(value: FormDataEntryValue | null, userId: number): Pr
   return parsed.data;
 }
 
-/**
- * Finds the `tshare_subject_grades` row for a subject/grade pair, creating it
- * when the pair is new — the legacy catalogue does not cover every combination
- * and a teacher should not be blocked by that.
- */
-async function subjectGradeId(subjectId: number, gradeId: number): Promise<number> {
-  const found = await db()
-    .from(T.subjectGrades)
-    .select("id")
-    .eq("subject_id", subjectId)
-    .eq("grade_id", gradeId)
-    .is("deleted_at", null)
-    .maybeSingle();
-  if (found.error) throw new Error(found.error.message);
-  if (found.data) return (found.data as { id: number }).id;
-
-  const created = unwrap(
-    await db()
-      .from(T.subjectGrades)
-      .insert({ subject_id: subjectId, grade_id: gradeId })
-      .select("id")
-      .single(),
-    "create subject/grade",
-  ) as { id: number };
-  return created.id;
-}
-
 /** Splits a textarea into trimmed, non-empty lines. */
 function lines(value: FormDataEntryValue | null): string[] {
   if (typeof value !== "string") return [];
@@ -307,7 +281,7 @@ export async function createActivity(
 
   let activityId: number | null = null;
   try {
-    const pairId = await subjectGradeId(parsed.data.subjectId, parsed.data.gradeId);
+    const pairId = await ensureSubjectGrade(parsed.data.subjectId, parsed.data.gradeId);
 
     const activity = unwrap(
       await db()

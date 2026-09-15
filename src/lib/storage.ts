@@ -1,5 +1,13 @@
 import "server-only";
-import { PutObjectCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env, hasStorageConfig } from "@/lib/env";
 
@@ -103,4 +111,112 @@ export async function fileUrl(
     // A missing object or a credential problem should not take a page down.
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// El bucket como carpeta — sólo lo usa el panel de administración
+// ---------------------------------------------------------------------------
+
+/**
+ * Lo que S3 devuelve de un objeto cuando se lo lista, que es menos de lo que
+ * tiene: no hay forma de saber el tipo sin pedirlo objeto por objeto.
+ */
+export type StoredObject = {
+  key: string;
+  size: number;
+  lastModified: string | null;
+};
+
+export type ObjectPage = {
+  /** Las "carpetas" que cuelgan del prefijo. S3 no tiene carpetas: son los
+   * prefijos comunes hasta la primera barra, que es lo mismo a efectos de
+   * navegar. */
+  folders: string[];
+  objects: StoredObject[];
+  /** Con qué pedir la página siguiente, o null cuando no hay más. */
+  next: string | null;
+};
+
+/** Cuántos objetos trae una página del explorador. */
+const LIST_PAGE_SIZE = 100;
+
+/**
+ * Un tramo del bucket.
+ *
+ * Con `Delimiter: "/"` S3 devuelve el nivel y no el árbol entero, que en este
+ * bucket son decenas de miles de objetos. La paginación es por token opaco
+ * (`ContinuationToken`) y no por número de página: no hay forma de saltar a la
+ * página siete sin haber pasado por las seis anteriores.
+ */
+export async function listObjects(prefix: string, cursor?: string | null): Promise<ObjectPage> {
+  const result = await s3().send(
+    new ListObjectsV2Command({
+      Bucket: env.s3Bucket,
+      Prefix: prefix || undefined,
+      Delimiter: "/",
+      MaxKeys: LIST_PAGE_SIZE,
+      ContinuationToken: cursor || undefined,
+    }),
+  );
+
+  return {
+    folders: (result.CommonPrefixes ?? [])
+      .map((p) => p.Prefix)
+      .filter((p): p is string => Boolean(p)),
+    objects: (result.Contents ?? [])
+      // Una clave que termina en "/" es la carpeta misma, creada por alguna
+      // consola; como objeto no es nada y no se puede abrir.
+      .filter((o) => o.Key && o.Key !== prefix && !o.Key.endsWith("/"))
+      .map((o) => ({
+        key: o.Key!,
+        size: o.Size ?? 0,
+        lastModified: o.LastModified ? o.LastModified.toISOString() : null,
+      })),
+    next: result.IsTruncated ? (result.NextContinuationToken ?? null) : null,
+  };
+}
+
+/** True cuando el objeto existe. Un error de permisos cuenta como que no. */
+export async function objectExists(key: string): Promise<boolean> {
+  try {
+    await s3().send(new HeadObjectCommand({ Bucket: env.s3Bucket, Key: key }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Borra un objeto. Revienta si el bucket no da permiso, que es lo que hay que
+ * mostrarle a quien lo intentó.
+ *
+ * Y lo normal es que no lo dé: el usuario IAM de producción
+ * (`arn:aws:iam::…:user/S3`) tiene `PutObject`, `GetObject`, `ListBucket` y
+ * `CopyObject`, pero no `DeleteObject` — comprobado contra el bucket. Quien
+ * quiera borrar de verdad desde el panel tiene que agregarle esa acción a la
+ * política; hasta entonces el panel enseña el `AccessDenied` tal cual en vez
+ * de decir que borró algo que sigue ahí.
+ */
+export async function deleteObject(key: string): Promise<void> {
+  await s3().send(new DeleteObjectCommand({ Bucket: env.s3Bucket, Key: key }));
+}
+
+/**
+ * Copia un objeto dentro del mismo bucket.
+ *
+ * Es la mitad de "renombrar" que S3 sabe hacer; la otra mitad es borrar el
+ * original, y va aparte a propósito, porque en este bucket falla. Quien llama
+ * decide qué hacer con eso: `renameStoredObject` deja las filas apuntando a la
+ * copia — que existe y es correcta — y avisa de que la vieja quedó.
+ */
+export async function copyObject(from: string, to: string): Promise<void> {
+  await s3().send(
+    new CopyObjectCommand({
+      Bucket: env.s3Bucket,
+      // El origen va con el bucket delante y percent-encoded: una clave con un
+      // espacio o un signo de más rompe la copia si se manda tal cual.
+      CopySource: `${env.s3Bucket}/${encodeURIComponent(from).replace(/%2F/g, "/")}`,
+      Key: to,
+    }),
+  );
 }

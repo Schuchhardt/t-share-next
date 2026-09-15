@@ -61,3 +61,93 @@ export type UploadedFile = {
   ticket: string;
   name: string;
 };
+
+// ---------------------------------------------------------------------------
+// El panel de administración
+// ---------------------------------------------------------------------------
+
+/**
+ * La ruta por la que el panel escribe en el bucket.
+ *
+ * Es otra que la del profesor porque acepta otra cosa: cualquier carpeta, y no
+ * sólo `actividades/portadas` o `actividades/recursos`; cualquier tipo de
+ * archivo, y no sólo imágenes para la portada; y la autoriza la llave del
+ * panel, no la sesión de nadie.
+ */
+export const ADMIN_UPLOAD_ENDPOINT = "/api/admin/subidas";
+
+/** La carpeta del bucket donde dejar el archivo, percent-encoded. */
+export const PREFIX_HEADER = "x-upload-prefix";
+
+/** Cómo nombrar el objeto. Ver `AdminUploadMode`. */
+export const MODE_HEADER = "x-upload-mode";
+
+/**
+ * `uuid` inventa el nombre, que es lo correcto para lo que sube alguien de
+ * fuera: el nombre elegido nunca toca la clave y no hay forma de escribir
+ * encima de otro objeto. `name` conserva el nombre original — el explorador de
+ * archivos lo usa, porque ahí el nombre es justamente lo que se está
+ * administrando — y la ruta le busca un sufijo libre si esa clave ya existe.
+ */
+export type AdminUploadMode = "uuid" | "name";
+
+/**
+ * El mismo techo que el resto: lo pone la plataforma, no la aplicación. La
+ * función de Netlify acepta 6 MB de payload y el binario viaja en base64, así
+ * que quedan unos 4,5 MB reales. Un archivo más grande que esto hay que
+ * subirlo a S3 por fuera.
+ */
+export const MAX_ADMIN_FILE_BYTES = MAX_FILE_BYTES;
+
+/**
+ * Los atajos del explorador de archivos: las carpetas donde está de verdad lo
+ * que el sitio muestra, contadas contra las columnas `*_key` de la base.
+ *
+ * `actividades/avatars` son las portadas que escribió Laravel (823 filas) y
+ * `actividades/portadas` las que escribe esta aplicación (9): son dos carpetas
+ * para lo mismo, y por eso están las dos. El bucket tiene alguna carpeta más
+ * — `pruebas`, `backup-migracion` — a la que se llega navegando desde la raíz,
+ * pero ninguna fila las nombra.
+ */
+export const KNOWN_FOLDERS = [
+  "actividades/pdf",
+  "actividades/avatars",
+  "actividades/recursos",
+  "actividades/portadas",
+  "users/avatars",
+] as const;
+
+/**
+ * Una clave de S3 utilizable: sin barra inicial, sin tramos vacíos y sin `..`.
+ * Devuelve null cuando no queda nada aprovechable.
+ */
+export function normaliseKey(raw: string): string | null {
+  const parts = raw
+    .trim()
+    .split("/")
+    .map((part) => part.trim())
+    .filter((part) => part && part !== "." && part !== "..");
+  const key = parts.join("/");
+  return key.length > 0 && key.length <= 900 ? key : null;
+}
+
+/** Lo mismo para un prefijo: igual que una clave, pero terminado en barra. */
+export function normalisePrefix(raw: string): string {
+  const key = normaliseKey(raw);
+  return key ? `${key}/` : "";
+}
+
+/**
+ * Un nombre de archivo que puede vivir en una clave de S3: sin barras, sin
+ * caracteres de control y sin espacios de sobra. El acento se conserva — el
+ * bucket lo acepta y el nombre es lo que el profesor va a ver.
+ */
+export function safeFileName(raw: string): string {
+  const name = raw
+    .split("/")
+    .pop()!
+    .replace(/\p{Cc}/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return name.slice(0, 200) || "archivo";
+}

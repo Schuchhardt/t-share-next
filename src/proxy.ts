@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { ADMIN_COOKIE, verifyAdminToken } from "@/lib/admin/token";
 import { SESSION_COOKIE, verifySession } from "@/lib/auth/token";
 
 /**
@@ -10,6 +11,11 @@ import { SESSION_COOKIE, verifySession } from "@/lib/auth/token";
  *  2. Hold a migrated teacher on /cambiar-password until this app has written
  *     its own password hash for them. The flag travels in the session token,
  *     so this costs a signature check rather than a database round-trip.
+ *
+ * El panel de administración se resuelve antes que nada y por su cuenta: usa
+ * otra cookie, no tiene nada que ver con la sesión de un profesor, y no debe
+ * heredar ninguna de las reglas de abajo — a un admin no se le manda a cambiar
+ * la contraseña de nadie.
  *
  * The token is verified with `jose`, which runs in the Edge runtime; nothing
  * here imports the Supabase client or bcrypt.
@@ -31,12 +37,21 @@ const CHANGE_PASSWORD = "/cambiar-password";
  */
 const EMAIL_LINKS = ["/recuperar-clave", "/cambiar-clave", "/acceso"];
 
+/** El panel, y la única pantalla suya a la que se entra sin haber entrado. */
+const ADMIN = "/admin";
+const ADMIN_SIGN_IN = "/admin/entrar";
+
 function matches(pathname: string, routes: string[]): boolean {
   return routes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 }
 
 export default async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+
+  if (matches(pathname, [ADMIN])) {
+    return adminProxy(request, pathname, search);
+  }
+
   const session = await verifySession(request.cookies.get(SESSION_COOKIE)?.value);
 
   if (!session) {
@@ -65,6 +80,25 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/actividades", request.url));
   }
 
+  return NextResponse.next();
+}
+
+/**
+ * El panel. Sin `ADMIN_KEY` en el entorno `verifyAdminToken` devuelve null
+ * siempre, así que todo `/admin` termina en la pantalla de la llave y esa
+ * pantalla dice que no está habilitado: quitar la variable apaga el panel.
+ */
+async function adminProxy(request: NextRequest, pathname: string, search: string) {
+  const admin = await verifyAdminToken(request.cookies.get(ADMIN_COOKIE)?.value);
+
+  if (pathname === ADMIN_SIGN_IN) {
+    return admin ? NextResponse.redirect(new URL(ADMIN, request.url)) : NextResponse.next();
+  }
+  if (!admin) {
+    const url = new URL(ADMIN_SIGN_IN, request.url);
+    url.searchParams.set("next", `${pathname}${search}`);
+    return NextResponse.redirect(url);
+  }
   return NextResponse.next();
 }
 

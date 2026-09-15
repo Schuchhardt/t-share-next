@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useRef } from "react";
+import { useActionState, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { StarRating, StarRatingInput } from "@/components/star-rating";
 import { addComment } from "@/lib/activity-actions";
 import { formatDate } from "@/lib/format";
 import type { Comment } from "@/lib/comments";
@@ -19,10 +20,16 @@ export function CommentThread({
   signedIn: boolean;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
+  // El puntaje vive acá y no en el DOM porque `form.reset()` devuelve los
+  // radios a su estado inicial pero no le avisa a las estrellas.
+  const [rating, setRating] = useState(0);
   const [state, formAction] = useActionState(
     async (prev: { ok: boolean; error: string | null }, formData: FormData) => {
       const result = await addComment(prev, formData);
-      if (result.ok) formRef.current?.reset();
+      if (result.ok) {
+        formRef.current?.reset();
+        setRating(0);
+      }
       return result;
     },
     { ok: true, error: null },
@@ -49,19 +56,9 @@ export function CommentThread({
             placeholder="¿Cómo te resultó en la sala?"
             className="field resize-y"
           />
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
+            <StarRatingInput name="rating" label="Puntaje" value={rating} onChange={setRating} />
             <SubmitComment />
-            <label htmlFor="comment-rating" className="text-sm text-muted">
-              Puntaje
-            </label>
-            <select id="comment-rating" name="rating" defaultValue="" className="field w-auto py-2">
-              <option value="">—</option>
-              {[5, 4, 3, 2, 1].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
             <span aria-live="polite" className="text-sm text-coral-ink">
               {state.error}
             </span>
@@ -88,9 +85,7 @@ export function CommentThread({
               {comment.author?.name ?? "Profesor/a"}
             </span>
             <span className="text-xs text-muted">{formatDate(comment.createdAt)}</span>
-            {comment.rating !== null && (
-              <span className="text-xs font-semibold text-indigo">{comment.rating} / 5</span>
-            )}
+            {comment.rating !== null && <StarRating value={comment.rating} />}
           </div>
           <p className="text-[15px] leading-[1.6] whitespace-pre-line text-pretty text-body">
             {comment.body}

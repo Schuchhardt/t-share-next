@@ -75,6 +75,7 @@ Las URLs se mantienen iguales a las del front Angular para no romper enlaces ni 
 | `/cambiar-clave` | Elegir contraseña nueva desde ese enlace | con el token |
 | `/acceso` | Enlace de acceso: entra y manda a elegir contraseña | con el token |
 | `/sitemap.xml`, `/robots.txt` | Generados desde la base (ver [SEO](#seo)) | público |
+| `/admin/*` | Panel de administración (ver [abajo](#panel-de-administración)) | con `ADMIN_KEY` |
 
 ## SEO
 
@@ -118,6 +119,8 @@ sigue resolviendo. Sobre eso:
    pesar un archivo y por qué: ver [Subida de archivos](#subida-de-archivos).
 4. **Correo.** `RESEND_API_KEY` y, en local, `APP_URL=http://localhost:9796`.
    Ver [Correo](#correo).
+5. **Panel (opcional).** `ADMIN_KEY` habilita `/admin`. Sin ella el panel no
+   existe. Ver [Panel de administración](#panel-de-administración).
 
 ## Subida de archivos
 
@@ -159,6 +162,73 @@ this bucket`). El día que se pueda configurar, en *S3 → el bucket → Permiss
   }
 ]
 ```
+
+## Panel de administración
+
+`/admin` administra actividades, cuentas y el bucket. Se entra con una llave
+—la variable de entorno `ADMIN_KEY`— y no con una cuenta: no hay usuario
+administrador en la base, y tampoco hace falta uno.
+
+```bash
+# genera una y ponla en .env.local (o en las variables del sitio en Netlify)
+openssl rand -base64 32
+```
+
+**Sin `ADMIN_KEY` el panel no existe.** `/admin` lleva a una pantalla que lo
+dice y no hay forma de entrar, así que un entorno donde nadie lo va a usar se
+deja simplemente sin la variable. Cambiarla cierra en el acto todas las
+sesiones abiertas: el token lleva la huella de la llave con la que se entró
+(`src/lib/admin/token.ts`).
+
+La sesión es una cookie propia, `tshare_admin`, separada de la del profesor:
+entrar al panel no cambia lo que ve el sitio, y salir del sitio no abre ni
+cierra el panel. Dura ocho horas, va `httpOnly` y `sameSite=strict` —al panel
+se llega escribiendo la URL, nunca desde un enlace de fuera—, así que un POST
+cross-site a cualquiera de sus acciones llega sin cookie. `src/proxy.ts`
+redirige a `/admin/entrar` a quien no la tenga, pero la autorización de verdad
+es el `requireAdmin()` con el que empieza cada server action: el proxy es
+comodidad.
+
+| Pantalla | Qué hace |
+| --- | --- |
+| `/admin` | Cuántas actividades y cuentas hay, y cuántas borradas |
+| `/admin/actividades` | Buscar, crear, editar; documentos uno a uno |
+| `/admin/usuarios` | Buscar, crear, editar, roles, contraseña y foto |
+| `/admin/archivos` | El bucket de S3: navegar, subir, mover y borrar |
+
+**Borrar y eliminar son dos cosas.** *Borrar* marca `deleted_at`: la fila sigue
+en la base, el sitio deja de mostrarla y se puede restaurar. *Eliminar
+definitivamente* borra la fila, y el esquema cascadea —eliminar una cuenta se
+lleva sus actividades, sus comentarios y sus descargas—, así que pide escribir
+el correo entero (o la palabra `ELIMINAR`) antes de dejar apretar el botón.
+
+Las subidas del panel van por `POST /api/admin/subidas`, hermana de la del
+formulario del profesor y con el mismo techo de 4 MB por la misma razón (ver
+[Por qué 4 MB](#por-qué-4-mb)). No devuelve *ticket* firmado: el ticket existe
+para que un formulario manipulado no cuelgue de una actividad un objeto ajeno
+del bucket, y quien tiene la llave del panel puede tocar cualquier objeto de
+todas formas.
+
+### Borrar en S3 no está permitido
+
+El usuario IAM de producción (`arn:aws:iam::…:user/S3`) tiene `PutObject`,
+`GetObject`, `ListBucket` y `CopyObject`, pero **no `DeleteObject`** —
+comprobado contra el bucket. Así que:
+
+* **Borrar** un objeto desde el panel responde `AccessDenied`, y el panel lo
+  muestra tal cual en vez de decir que borró algo que sigue ahí.
+* **Mover** sí funciona: copia, apunta a la clave nueva todas las filas que
+  nombraban la vieja, e intenta borrar el original. Si ese borrado falla, el
+  movimiento está hecho igual —la copia existe y las filas la nombran— y el
+  mensaje avisa de que la copia vieja quedó.
+
+Para borrar de verdad hay que agregarle `s3:DeleteObject` a la política de ese
+usuario. Nada más cambia en el código.
+
+Mover y borrar arrastran las filas que nombraban esa clave —portada, PDF,
+documento, material, foto de perfil: seis columnas `*_key` repartidas por el
+esquema, que `src/lib/admin/files.ts` recorre—. Sin eso, renombrar una portada
+la borraría de la actividad que la muestra sin decir nada.
 
 ## Mudar el proyecto Supabase
 
@@ -272,10 +342,11 @@ direcciones están registradas.
 
 ## Tests
 
-`npm test` corre 222 pruebas unitarias sin necesidad de base de datos. Entre
+`npm test` corre 239 pruebas unitarias sin necesidad de base de datos. Entre
 otras cosas fijan el mapeo de la migración contra los CSV reales, la
-verificación de los hashes `$2y$`, el token de sesión, el armado de filtros y el
-formulario de subida.
+verificación de los hashes `$2y$`, el token de sesión, el armado de filtros, el
+formulario de subida y —del panel— que su sesión no la abra nada que no sea la
+llave, ni el token de un profesor ni el de una subida.
 
 `npm run test:e2e` maneja la aplicación real contra un proyecto Supabase. Antes:
 
@@ -287,6 +358,9 @@ npm run db:seed:e2e -- --drop   # limpiar
 
 Sin credenciales en `.env.local` la suite se reporta como *skipped* en vez de
 fallar, así que `npm test && npm run test:e2e` es seguro en cualquier máquina.
+`tests/e2e/admin.spec.ts` se salta además cuando falta `ADMIN_KEY`, que es lo
+que apaga el panel; lo que crea lo elimina el propio caso, así que no deja
+cuentas ni actividades de prueba en el catálogo.
 
 ### Limpiar lo que dejan las pruebas
 

@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { StrictMode } from "react";
+import { StrictMode, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ActivityRow } from "@/components/activity-row";
 import { DocumentList, describe as describeDoc } from "@/components/document-list";
 import { FileDropzone, formatSize, sameFile } from "@/components/file-dropzone";
 import { ImagePicker } from "@/components/image-picker";
+import { StarRating, StarRatingInput } from "@/components/star-rating";
 import type { ActivityDocument, ActivitySummary } from "@/lib/types";
 import { initials } from "@/lib/types";
 import { MAX_FILES, MAX_FILE_BYTES, maxMbFor } from "@/lib/uploads";
@@ -365,6 +366,78 @@ describe("DocumentList", () => {
     );
     expect(screen.getByText("No disponible")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Ver" })).not.toBeInTheDocument();
+  });
+});
+
+describe("StarRating", () => {
+  /** Las estrellas encendidas son las que llevan el color del puntaje. */
+  const lit = () => document.querySelectorAll("svg.text-star").length;
+
+  it("paints as many stars as the score, and says it out loud", () => {
+    render(<StarRating value={4} />);
+
+    expect(screen.getByRole("img", { name: "4 de 5" })).toBeInTheDocument();
+    expect(lit()).toBe(4);
+  });
+
+  it("rounds a migrated half point instead of drawing four and a half", () => {
+    render(<StarRating value={3.5} />);
+    expect(lit()).toBe(4);
+  });
+});
+
+describe("StarRatingInput", () => {
+  const lit = () => document.querySelectorAll("svg.text-star").length;
+
+  /** El puntaje lo guarda el formulario; acá lo guarda este envoltorio. */
+  function Picker() {
+    const [value, setValue] = useState(0);
+    return <StarRatingInput name="rating" label="Puntaje" value={value} onChange={setValue} />;
+  }
+
+  it("starts with nothing chosen, so the score stays optional", () => {
+    render(<Picker />);
+
+    expect(lit()).toBe(0);
+    expect(screen.getAllByRole("radio").some((r) => (r as HTMLInputElement).checked)).toBe(false);
+    expect(screen.queryByRole("button", { name: "Quitar" })).not.toBeInTheDocument();
+  });
+
+  it("marks the radio the form submits, and paints up to it", async () => {
+    const user = userEvent.setup();
+    render(<Picker />);
+
+    await user.click(screen.getByRole("radio", { name: "3 de 5" }));
+
+    const chosen = screen.getByRole("radio", { name: "3 de 5" }) as HTMLInputElement;
+    expect(chosen.checked).toBe(true);
+    expect(chosen.name).toBe("rating");
+    expect(chosen.value).toBe("3");
+    expect(lit()).toBe(3);
+  });
+
+  it("previews the score under the cursor without committing it", () => {
+    render(<Picker />);
+    const fourth = screen.getByRole("radio", { name: "4 de 5" }).closest("label")!;
+
+    fireEvent.mouseEnter(fourth);
+    expect(lit()).toBe(4);
+    expect((screen.getByRole("radio", { name: "4 de 5" }) as HTMLInputElement).checked).toBe(false);
+
+    fireEvent.mouseLeave(fourth.parentElement!);
+    expect(lit()).toBe(0);
+  });
+
+  /** Un radio no se desmarca solo: sin esto el puntaje sería irreversible. */
+  it("lets go of a score already given", async () => {
+    const user = userEvent.setup();
+    render(<Picker />);
+
+    await user.click(screen.getByRole("radio", { name: "5 de 5" }));
+    await user.click(screen.getByRole("button", { name: "Quitar" }));
+
+    expect(lit()).toBe(0);
+    expect(screen.getAllByRole("radio").some((r) => (r as HTMLInputElement).checked)).toBe(false);
   });
 });
 
