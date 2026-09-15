@@ -14,6 +14,7 @@
     "test:e2e:ui": "playwright test --ui",
     "db:migrate": "tsx db/scripts/migrate.ts",
     "db:clone": "tsx db/scripts/clone.ts",
+    "db:clean:test": "tsx db/scripts/clean-test-data.ts",
     "db:verify": "tsx db/scripts/verify.ts",
     "db:inspect": "tsx db/scripts/inspect.ts",
     "db:seed:e2e": "tsx db/scripts/seed-e2e.ts"

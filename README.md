@@ -288,6 +288,38 @@ npm run db:seed:e2e -- --drop   # limpiar
 Sin credenciales en `.env.local` la suite se reporta como *skipped* en vez de
 fallar, así que `npm test && npm run test:e2e` es seguro en cualquier máquina.
 
+### Limpiar lo que dejan las pruebas
+
+La suite corre contra un proyecto real, y cada pasada siembra las fixtures y
+publica un par de actividades. Esas quedan siendo las filas más nuevas de la
+tabla, así que **se toman los cuatro espacios de "Agregadas recientemente" en
+la portada** y empujan fuera a las clases de verdad.
+
+```bash
+npm run db:clean:test           # muestra qué borraría, sin tocar nada
+npm run db:clean:test -- --yes  # lo borra
+```
+
+Limpia el proyecto que nombre `SUPABASE_URL`, y lo imprime antes de hacer
+nada. Para limpiar otro, se le pasan las variables en la misma línea.
+
+Dos cosas que hace y que `db:seed:e2e -- --drop` no:
+
+- **Borra los archivos de S3.** El test de adjuntos sube una portada de 2 MB y
+  un PDF de 3 MB en cada corrida, y nadie los estaba sacando del bucket.
+- **No borra por rango de ids.** Las fixtures son las filas más altas de la
+  tabla, así que las secuencias reparten ids *por encima* de ellas: un
+  `id >= 900000` se llevaría las actividades de profesores reales. Borra lo que
+  cuelga de las cuentas de prueba, más las actividades cuyo título es el que
+  generan los specs (un timestamp de 13 dígitos).
+
+**Hoy el borrado en S3 no funciona**: las credenciales de producción tienen
+`PutObject` y `GetObject`, pero no `s3:DeleteObject`, así que el bucket lo
+rechaza. El script lo dice, borra igual las filas —que es la mitad urgente— y
+anota las claves en `db/.orphaned-s3-keys.txt`, porque una vez que la fila se
+va nadie más recuerda que ese objeto existe. Agregando el permiso en IAM y
+volviendo a correrlo, esas claves se pueden limpiar.
+
 `recuperar-clave.spec.ts` cubre los dos enlaces por correo de punta a punta:
 que pedir uno deja la fila que corresponde, que abrirlo hace lo que promete,
 que se gasta de una sola vez y que un token no sirve para el otro flujo. El

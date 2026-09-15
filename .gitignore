@@ -49,3 +49,6 @@ next-env.d.ts
 
 # db clone dumps (raw production rows — never commit)
 /db/.clone/
+
+# claves de S3 que no se pudieron borrar (ver db/scripts/clean-test-data.ts)
+/db/.orphaned-s3-keys.txt
